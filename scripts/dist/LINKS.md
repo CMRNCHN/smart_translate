@@ -1,25 +1,18 @@
 # SmartTranslate distributable links
 
-Version: **1.0.1**  
-Branch/ref: **main**
+Branch: **cursor/scriptable-only-bundler**
 
-## Tampermonkey (auto-update)
+Paste either raw file into **one** Scriptable script (any name).
 
-Install either URL in Tampermonkey (or Violentmonkey). Updates use `@updateURL`.
+## SmartTranslate (v1)
 
-### SmartTranslate (v1)
+- Raw: https://raw.githubusercontent.com/CMRNCHN/smart_translate/cursor/scriptable-only-bundler/scripts/dist/SmartTranslate.js
+- jsDelivr: https://cdn.jsdelivr.net/gh/CMRNCHN/smart_translate@cursor/scriptable-only-bundler/scripts/dist/SmartTranslate.js
 
-- Raw: https://raw.githubusercontent.com/CMRNCHN/smart_translate/main/scripts/dist/SmartTranslate.user.js
-- jsDelivr: https://cdn.jsdelivr.net/gh/CMRNCHN/smart_translate@main/scripts/dist/SmartTranslate.user.js
+## SmartTranslate Pro
 
-### SmartTranslate Pro
-
-- Raw: https://raw.githubusercontent.com/CMRNCHN/smart_translate/main/scripts/dist/SmartTranslatePro.user.js
-- jsDelivr: https://cdn.jsdelivr.net/gh/CMRNCHN/smart_translate@main/scripts/dist/SmartTranslatePro.user.js
-
-## Scriptable
-
-Paste the same file into one Scriptable script. Prefer the raw or jsDelivr URL contents.
+- Raw: https://raw.githubusercontent.com/CMRNCHN/smart_translate/cursor/scriptable-only-bundler/scripts/dist/SmartTranslatePro.js
+- jsDelivr: https://cdn.jsdelivr.net/gh/CMRNCHN/smart_translate@cursor/scriptable-only-bundler/scripts/dist/SmartTranslatePro.js
 
 ## Rebuild
 
