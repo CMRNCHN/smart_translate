@@ -24,11 +24,39 @@
 //   SMART_TRANSLATE_ELEVENLABS_API_KEY
 //
 // Version: 1.0.0
+//
+// IMPORTANT (Scriptable):
+// Create THREE scripts with these EXACT names (no spaces, same capitalization):
+//   SmartTranslateShared
+//   SmartTranslateConversation
+//   SmartTranslate
+// Or paste the single-file bundle from scripts/dist/SmartTranslate.js instead.
 
-const Shared = importModule("SmartTranslateShared");
-const Conversation = importModule("SmartTranslateConversation");
+let Shared;
+let Conversation;
+let modulesLoaded = false;
+try {
+  Shared = importModule("SmartTranslateShared");
+  Conversation = importModule("SmartTranslateConversation");
+  modulesLoaded = true;
+} catch (error) {
+  const alert = new Alert();
+  alert.title = "Missing Scriptable Modules";
+  alert.message =
+    "Could not import SmartTranslateShared / SmartTranslateConversation.\n\n" +
+    "Fix: In Scriptable, create separate scripts named EXACTLY:\n" +
+    "• SmartTranslateShared\n" +
+    "• SmartTranslateConversation\n" +
+    "• SmartTranslate\n\n" +
+    "Paste each matching file from the repo scripts/ folder.\n\n" +
+    "Easier option: paste scripts/dist/SmartTranslate.js as ONE script.";
+  alert.addAction("OK");
+  await alert.presentAlert();
+}
 
-await main();
+if (modulesLoaded) {
+  await main();
+}
 Script.complete();
 
 async function main() {

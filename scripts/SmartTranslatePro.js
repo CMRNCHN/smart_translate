@@ -22,12 +22,42 @@
 //   SMART_TRANSLATE_OPENAI_API_KEY   (optional, richer summaries)
 //
 // Version: 1.0.0-pro
+//
+// IMPORTANT (Scriptable):
+// Create FOUR scripts with these EXACT names:
+//   SmartTranslateShared
+//   SmartTranslateConversation
+//   SmartTranslateProKit
+//   SmartTranslatePro
+// Or paste scripts/dist/SmartTranslatePro.js as ONE script.
 
-const Shared = importModule("SmartTranslateShared");
-const Conversation = importModule("SmartTranslateConversation");
-const Pro = importModule("SmartTranslateProKit");
+let Shared;
+let Conversation;
+let Pro;
+let modulesLoaded = false;
+try {
+  Shared = importModule("SmartTranslateShared");
+  Conversation = importModule("SmartTranslateConversation");
+  Pro = importModule("SmartTranslateProKit");
+  modulesLoaded = true;
+} catch (error) {
+  const alert = new Alert();
+  alert.title = "Missing Scriptable Modules";
+  alert.message =
+    "Could not import required modules.\n\n" +
+    "Fix: In Scriptable, create scripts named EXACTLY:\n" +
+    "• SmartTranslateShared\n" +
+    "• SmartTranslateConversation\n" +
+    "• SmartTranslateProKit\n" +
+    "• SmartTranslatePro\n\n" +
+    "Easier option: paste scripts/dist/SmartTranslatePro.js as ONE script.";
+  alert.addAction("OK");
+  await alert.presentAlert();
+}
 
-await main();
+if (modulesLoaded) {
+  await main();
+}
 Script.complete();
 
 async function main() {

@@ -2,33 +2,53 @@
 
 Scriptable app for bidirectional translation with optional conversation transcripts.
 
+## Install (easiest — one script)
+
+1. Open **Scriptable**.
+2. Create one new script (any name, e.g. `SmartTranslate`).
+3. Paste the entire contents of [`scripts/dist/SmartTranslate.js`](scripts/dist/SmartTranslate.js).
+4. Run it and complete setup (DeepL key required).
+
+For Pro, paste [`scripts/dist/SmartTranslatePro.js`](scripts/dist/SmartTranslatePro.js) instead.
+
+Rebuild standalones after editing modular sources:
+
+```bash
+node tools/bundle.mjs
+```
+
+## Install (modular — multiple scripts)
+
+`importModule` only works if each dependency exists as its **own Scriptable script** with the **exact** name (no spaces, matching capitalization). Scriptable does **not** load modules from this git repo folder automatically.
+
+### v1 (3 scripts)
+
+Create these scripts and paste the matching `scripts/*.js` files:
+
+1. `SmartTranslateShared`
+2. `SmartTranslateConversation`
+3. `SmartTranslate` ← run this one
+
+### Pro (4 scripts)
+
+1. `SmartTranslateShared`
+2. `SmartTranslateConversation`
+3. `SmartTranslateProKit`
+4. `SmartTranslatePro` ← run this one
+
+If you only paste `SmartTranslate.js`, you get: **Error on line 28: no file to import at SmartTranslateShared**.
+
 ## Scripts
 
 | Script | Role |
 |--------|------|
+| `scripts/dist/SmartTranslate.js` | **Recommended** — single-file v1 |
+| `scripts/dist/SmartTranslatePro.js` | **Recommended** — single-file Pro |
 | `SmartTranslateShared.js` | Shared config, iCloud storage, DeepL, TTS |
 | `SmartTranslateConversation.js` | Conversation Mode engine |
-| `SmartTranslate.js` | **v1** entry — Type / Paste / Dictate / Conversation / Settings |
+| `SmartTranslate.js` | Modular v1 entry |
 | `SmartTranslateProKit.js` | Pro intelligence + export |
-| `SmartTranslatePro.js` | **Pro** entry — full feature menu |
-
-## Install (v1)
-
-1. Open **Scriptable** (enable iCloud sync for data).
-2. Create scripts and paste from `scripts/` (names must match exactly):
-   - `SmartTranslateShared.js`
-   - `SmartTranslateConversation.js`
-   - `SmartTranslate.js`
-3. Run **SmartTranslate** and complete setup (DeepL key required).
-
-## Install (Pro)
-
-Same as v1, plus:
-
-- `SmartTranslateProKit.js`
-- `SmartTranslatePro.js` ← run this / add to Home Screen
-
-Pro shares the same iCloud data and Keychain keys as v1.
+| `SmartTranslatePro.js` | Modular Pro entry |
 
 ## v1 Menu
 
