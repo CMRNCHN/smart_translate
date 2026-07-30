@@ -62,27 +62,19 @@ If you only paste `SmartTranslate.js`, you get: **Error on line 28: no file to i
 
 One-shot modes do **not** save translation history.
 
-## Pro Menu
-
-Everything in v1, plus:
+## Pro Menu (lean)
 
 | Action | What it does |
 |--------|----------------|
-| **Library** | Search, favorites, browse, filter by tag, export |
-| **People** | Profiles, notes, languages, memory, per-person chats |
-| **Timeline** | Today / Yesterday / Last 7 Days / This Month / Older |
-| **Statistics** | Totals, average length, top language, longest chat |
-| **Learning** | Vocabulary hints from a conversation |
-| **Voice Profiles** | Review per-language TTS setup |
+| **Quick Translate ›** | Type / Paste / Dictate |
+| **Conversation** | Multi-turn session + short save summary |
+| **Library** | Search, favorites, browse, export |
+| **People** | Profiles and past chats |
+| **Settings** | Languages, API keys, speech |
 
-When you **end a conversation in Pro**, it runs intelligence automatically:
+Home stays open (UITable) until you dismiss it. Post-session only shows a short summary + optional favorite.
 
-1. Summary (extractive, or OpenAI if configured)
-2. Purpose + auto tags
-3. Manual tag edit
-4. Favorite prompt
-5. Memory extraction → confirm save to person profile
-6. Optional export (Markdown / JSON / TXT / HTML)
+**Not in lean Pro UI:** Timeline, Statistics, Learning, Voice Profiles menu, OpenAI summaries, memory prompts, long tag/purpose wizards.
 
 ## Storage (iCloud)
 

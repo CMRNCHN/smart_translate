@@ -448,6 +448,89 @@ async function showSuccess(title, message) {
   await alert.presentAlert();
 }
 
+/**
+ * Sleek sectioned menu using UITable.
+ *
+ * sections: [
+ *   {
+ *     header?: string,
+ *     rows: [{ id, title, subtitle?, symbol? }]
+ *   }
+ * ]
+ *
+ * Returns the selected row id, or null if dismissed.
+ */
+async function presentTableMenu({ title, subtitle, sections }) {
+  let selectedId = null;
+  const table = new UITable();
+  table.showSeparators = true;
+
+  if (title || subtitle) {
+    const header = new UITableRow();
+    header.isHeader = true;
+    header.height = subtitle ? 52 : 40;
+    const titleCell = UITableCell.text(title || "Menu", subtitle || "");
+    titleCell.leftAligned();
+    titleCell.widthWeight = 100;
+    header.addCell(titleCell);
+    table.addRow(header);
+  }
+
+  for (const section of sections || []) {
+    if (section.header) {
+      const sectionHeader = new UITableRow();
+      sectionHeader.isHeader = true;
+      sectionHeader.height = 32;
+      const cell = UITableCell.text(section.header.toUpperCase());
+      cell.leftAligned();
+      cell.widthWeight = 100;
+      sectionHeader.addCell(cell);
+      table.addRow(sectionHeader);
+    }
+
+    for (const item of section.rows || []) {
+      const row = new UITableRow();
+      row.dismissOnSelect = true;
+      row.height = item.subtitle ? 56 : 48;
+      row.cellSpacing = 10;
+
+      if (item.symbol && typeof SFSymbol !== "undefined") {
+        try {
+          const symbol = SFSymbol.named(item.symbol);
+          if (symbol && symbol.image) {
+            const imageCell = UITableCell.image(symbol.image);
+            imageCell.widthWeight = 12;
+            imageCell.centerAligned();
+            row.addCell(imageCell);
+          }
+        } catch (error) {
+          // Fall through without icon.
+        }
+      }
+
+      const textCell = UITableCell.text(item.title, item.subtitle || "");
+      textCell.leftAligned();
+      textCell.widthWeight = item.symbol ? 78 : 90;
+      row.addCell(textCell);
+
+      if (item.disclosure) {
+        const chevron = UITableCell.text("›");
+        chevron.rightAligned();
+        chevron.widthWeight = 10;
+        row.addCell(chevron);
+      }
+
+      row.onSelect = () => {
+        selectedId = item.id;
+      };
+      table.addRow(row);
+    }
+  }
+
+  await table.present(false);
+  return selectedId;
+}
+
 async function promptForText(title, message, defaultText = "") {
   const alert = new Alert();
   alert.title = title;
@@ -624,6 +707,7 @@ module.exports = {
   dictateText,
   showError,
   showSuccess,
+  presentTableMenu,
   promptForText,
   confirm,
   chooseFromList,

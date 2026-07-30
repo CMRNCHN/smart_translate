@@ -453,6 +453,89 @@ async function showSuccess(title, message) {
   await alert.presentAlert();
 }
 
+/**
+ * Sleek sectioned menu using UITable.
+ *
+ * sections: [
+ *   {
+ *     header?: string,
+ *     rows: [{ id, title, subtitle?, symbol? }]
+ *   }
+ * ]
+ *
+ * Returns the selected row id, or null if dismissed.
+ */
+async function presentTableMenu({ title, subtitle, sections }) {
+  let selectedId = null;
+  const table = new UITable();
+  table.showSeparators = true;
+
+  if (title || subtitle) {
+    const header = new UITableRow();
+    header.isHeader = true;
+    header.height = subtitle ? 52 : 40;
+    const titleCell = UITableCell.text(title || "Menu", subtitle || "");
+    titleCell.leftAligned();
+    titleCell.widthWeight = 100;
+    header.addCell(titleCell);
+    table.addRow(header);
+  }
+
+  for (const section of sections || []) {
+    if (section.header) {
+      const sectionHeader = new UITableRow();
+      sectionHeader.isHeader = true;
+      sectionHeader.height = 32;
+      const cell = UITableCell.text(section.header.toUpperCase());
+      cell.leftAligned();
+      cell.widthWeight = 100;
+      sectionHeader.addCell(cell);
+      table.addRow(sectionHeader);
+    }
+
+    for (const item of section.rows || []) {
+      const row = new UITableRow();
+      row.dismissOnSelect = true;
+      row.height = item.subtitle ? 56 : 48;
+      row.cellSpacing = 10;
+
+      if (item.symbol && typeof SFSymbol !== "undefined") {
+        try {
+          const symbol = SFSymbol.named(item.symbol);
+          if (symbol && symbol.image) {
+            const imageCell = UITableCell.image(symbol.image);
+            imageCell.widthWeight = 12;
+            imageCell.centerAligned();
+            row.addCell(imageCell);
+          }
+        } catch (error) {
+          // Fall through without icon.
+        }
+      }
+
+      const textCell = UITableCell.text(item.title, item.subtitle || "");
+      textCell.leftAligned();
+      textCell.widthWeight = item.symbol ? 78 : 90;
+      row.addCell(textCell);
+
+      if (item.disclosure) {
+        const chevron = UITableCell.text("›");
+        chevron.rightAligned();
+        chevron.widthWeight = 10;
+        row.addCell(chevron);
+      }
+
+      row.onSelect = () => {
+        selectedId = item.id;
+      };
+      table.addRow(row);
+    }
+  }
+
+  await table.present(false);
+  return selectedId;
+}
+
 async function promptForText(title, message, defaultText = "") {
   const alert = new Alert();
   alert.title = title;
@@ -629,6 +712,7 @@ const Shared = {
   dictateText,
   showError,
   showSuccess,
+  presentTableMenu,
   promptForText,
   confirm,
   chooseFromList,
@@ -700,20 +784,47 @@ async function runConversation(config, hooks = {}) {
 
 async function showConversationMenu(hooks = {}) {
   const active = await loadActiveSession();
-  const alert = new Alert();
-  alert.title = "Conversation";
+
   if (active) {
-    alert.message = `Active with ${active.person.name} · ${active.session.turnCount} turns`;
-    alert.addAction("Continue Active");
-    alert.addAction("Discard & Start New");
-    alert.addAction("History");
-    alert.addAction("End Active");
-    alert.addCancelAction("Cancel");
-    const choice = await alert.presentAlert();
-    if (choice === 0) {
-      return "continue";
+    const choice = await Shared.presentTableMenu({
+      title: "Conversation",
+      subtitle: `Active with ${active.person.name} · ${active.session.turnCount} turns`,
+      sections: [
+        {
+          rows: [
+            {
+              id: "continue",
+              title: "Continue",
+              subtitle: "Resume the active session",
+              symbol: "play.fill"
+            },
+            {
+              id: "history",
+              title: "History",
+              subtitle: "Browse saved conversations",
+              symbol: "clock"
+            },
+            {
+              id: "end",
+              title: "End Active",
+              subtitle: "Finalize and save",
+              symbol: "checkmark.circle"
+            },
+            {
+              id: "discard",
+              title: "Discard & Start New",
+              subtitle: "Delete active turns",
+              symbol: "trash"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
+      return "cancel";
     }
-    if (choice === 1) {
+    if (choice === "discard") {
       const abandon = await Shared.confirm(
         "Discard Active Conversation?",
         "This permanently discards the active conversation and its turns."
@@ -724,28 +835,37 @@ async function showConversationMenu(hooks = {}) {
       await deleteActiveSession();
       return "new";
     }
-    if (choice === 2) {
-      return "history";
-    }
-    if (choice === 3) {
+    if (choice === "end") {
       await endConversation(active, hooks);
       return "cancel";
     }
-    return "cancel";
+    return choice;
   }
 
-  alert.message = "Start a multi-turn conversation with a person.";
-  alert.addAction("New Conversation");
-  alert.addAction("History");
-  alert.addCancelAction("Cancel");
-  const choice = await alert.presentAlert();
-  if (choice === 0) {
-    return "new";
-  }
-  if (choice === 1) {
-    return "history";
-  }
-  return "cancel";
+  const choice = await Shared.presentTableMenu({
+    title: "Conversation",
+    subtitle: "Start or review",
+    sections: [
+      {
+        rows: [
+          {
+            id: "new",
+            title: "New Conversation",
+            subtitle: "Pick a person and begin",
+            symbol: "plus.bubble"
+          },
+          {
+            id: "history",
+            title: "History",
+            subtitle: "Browse saved conversations",
+            symbol: "clock"
+          }
+        ]
+      }
+    ]
+  });
+
+  return choice || "cancel";
 }
 
 async function runNewSessionFlow(config, hooks = {}) {
@@ -1085,42 +1205,48 @@ async function endConversation(session, hooks = {}) {
 
 async function selectOrCreatePerson() {
   const people = await loadPeople();
+  const rows = people.map((person, index) => ({
+    id: String(index),
+    title: person.name,
+    subtitle: "Existing person",
+    symbol: "person.fill"
+  }));
+  rows.push({
+    id: "new",
+    title: "New Person",
+    subtitle: "Create a profile",
+    symbol: "person.badge.plus"
+  });
 
-  const alert = new Alert();
-  alert.title = "Conversation Person";
-  alert.message = "Select an existing person or create a new one.";
-  for (const person of people) {
-    alert.addAction(person.name);
-  }
-  alert.addAction("New Person");
-  alert.addCancelAction("Cancel");
+  const choice = await Shared.presentTableMenu({
+    title: "Who are you talking to?",
+    subtitle: "Select or create",
+    sections: [{ rows }]
+  });
 
-  const choice = await alert.presentAlert();
-  if (choice === -1) {
+  if (!choice) {
     return null;
   }
 
-  if (choice < people.length) {
-    return people[choice];
+  if (choice === "new") {
+    const name = await Shared.promptForText(
+      "New Person",
+      "Enter the person's name."
+    );
+    if (!name) {
+      return null;
+    }
+    const person = {
+      id: Shared.generateUUID(),
+      name: name.trim(),
+      createdAt: new Date().toISOString()
+    };
+    people.push(person);
+    await savePeople(people);
+    return person;
   }
 
-  const name = await Shared.promptForText(
-    "New Person",
-    "Enter the person's name."
-  );
-  if (!name) {
-    return null;
-  }
-
-  const person = {
-    id: Shared.generateUUID(),
-    name: name.trim(),
-    createdAt: new Date().toISOString()
-  };
-
-  people.push(person);
-  await savePeople(people);
-  return person;
+  return people[Number(choice)] || null;
 }
 
 async function loadPeople() {
@@ -1172,17 +1298,26 @@ async function showHistory() {
     return;
   }
 
-  const labels = sessions.map(
-    (session) =>
-      `${session.person.name} — ${Shared.formatDate(session.session.startedAt)} — ${session.session.turnCount} turns`
-  );
+  const choice = await Shared.presentTableMenu({
+    title: "History",
+    subtitle: `${sessions.length} conversation${sessions.length === 1 ? "" : "s"}`,
+    sections: [
+      {
+        rows: sessions.map((session, index) => ({
+          id: String(index),
+          title: session.person.name,
+          subtitle: `${Shared.formatDate(session.session.startedAt)} · ${session.session.turnCount} turns`,
+          symbol: "bubble.left.and.bubble.right",
+          disclosure: true
+        }))
+      }
+    ]
+  });
 
-  const choice = await Shared.chooseFromList("Conversation History", labels);
-  if (choice === -1) {
+  if (choice == null) {
     return;
   }
-
-  await displayConversation(sessions[choice]);
+  await displayConversation(sessions[Number(choice)]);
 }
 
 async function displayConversation(session) {
@@ -1256,23 +1391,20 @@ async function saveCompletedConversation(session) {
 
 // SmartTranslateProKit.js
 //
-// Pro intelligence + export layer for SmartTranslate.
-// Works on the same iCloud SmartTranslate/ data as v1.
+// Lean Pro layer for SmartTranslate (Scriptable-friendly).
 //
-// Features:
-//   Summaries · Keyword search · Tags · Favorites
-//   People directory · Memory extraction · Statistics
-//   Timeline · Export (Markdown / JSON / TXT / HTML)
-//   Learning hints · Context tags · Voice profile review
+// Keep:
+//   Library (search, favorites, browse, export)
+//   People directory
+//   Light post-session summary + auto-tags + favorite
 //
-// Optional Keychain:
-//   SMART_TRANSLATE_OPENAI_API_KEY  (richer summaries; optional)
+// Dropped from menus / wizard:
+//   Timeline, Statistics, Learning, Voice Profiles,
+//   OpenAI summaries, memory extraction, purpose picker
 //
-// Version: 1.0.0
+// Version: 1.1.0-lean
 
 
-const OPENAI_KEYCHAIN_KEY = "SMART_TRANSLATE_OPENAI_API_KEY";
-const OPENAI_TIMEOUT = 45;
 const EXPORTS_DIRECTORY = "exports";
 
 const AUTO_TAG_RULES = [
@@ -1285,32 +1417,15 @@ const AUTO_TAG_RULES = [
   { tag: "Emergency", words: ["help", "emergency", "police", "lost", "urgent", "danger"] }
 ];
 
-const PURPOSE_OPTIONS = [
-  "Travel",
-  "Business",
-  "Vacation",
-  "Medical",
-  "Emergency",
-  "Restaurant",
-  "Meeting",
-  "Interview",
-  "General"
-];
-
 const Pro = {
-  OPENAI_KEYCHAIN_KEY,
   runLibrary,
   runPeopleDirectory,
-  runStatistics,
-  runTimeline,
-  runLearningMode,
-  runVoiceProfiles,
   processCompletedSession,
   ensureProFields
 };
 
 // ============================================================
-// POST-SESSION PIPELINE
+// POST-SESSION (short)
 // ============================================================
 
 async function processCompletedSession(session, filePath) {
@@ -1318,72 +1433,27 @@ async function processCompletedSession(session, filePath) {
   let current = ensureProFields(session);
 
   current.intelligence.autoTags = detectAutoTags(current);
-  current.intelligence.summary = await buildSummary(current);
-  current.intelligence.learning = buildLearningHints(current);
-  current.intelligence.processedAt = new Date().toISOString();
-
-  const purposeChoice = await Shared.chooseFromList(
-    "Conversation Purpose",
-    PURPOSE_OPTIONS,
-    "Optional context label for this conversation."
-  );
-  if (purposeChoice !== -1) {
-    current.metadata.purpose = PURPOSE_OPTIONS[purposeChoice];
-    if (!current.intelligence.autoTags.includes(current.metadata.purpose)) {
-      current.intelligence.autoTags.push(current.metadata.purpose);
-    }
-  }
-
-  await saveSession(current, path);
-
-  await Shared.showSuccess(
-    "Pro Summary",
-    current.intelligence.summary.slice(0, 900)
-  );
-
-  const tags = await Shared.unique([
-    ...(current.intelligence.autoTags || []),
-    ...(current.intelligence.tags || [])
+  current.intelligence.tags = Shared.unique([
+    ...(current.intelligence.tags || []),
+    ...current.intelligence.autoTags
   ]);
-  const tagEdit = await Shared.promptForText(
-    "Tags",
-    "Comma-separated tags (auto tags prefilled).",
-    tags.join(", ")
-  );
-  if (tagEdit !== null) {
-    current.intelligence.tags = tagEdit
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-  }
-
-  const favorite = await Shared.confirm(
-    "Favorite?",
-    "Pin this conversation to favorites?"
-  );
-  current.intelligence.favorite = favorite;
-
-  const memories = extractMemoryCandidates(current);
-  if (memories.length > 0) {
-    const saveMemory = await Shared.confirm(
-      "Save Memory?",
-      `Suggested notes for ${current.person.name}:\n\n${memories.join("\n")}\n\nSave to their profile?`
-    );
-    if (saveMemory) {
-      await appendPersonMemory(current.person.id, memories);
-    }
-  }
+  current.intelligence.summary = buildExtractiveSummary(current);
+  current.intelligence.processedAt = new Date().toISOString();
 
   await touchPersonFromSession(current);
   await saveSession(current, path);
 
-  const exportNow = await Shared.confirm(
-    "Export?",
-    "Export this conversation now?"
+  await Shared.showSuccess(
+    "Saved",
+    current.intelligence.summary.slice(0, 700)
   );
-  if (exportNow) {
-    await exportSessionInteractive(current);
-  }
+
+  const favorite = await Shared.confirm(
+    "Favorite?",
+    "Pin this conversation?"
+  );
+  current.intelligence.favorite = favorite;
+  await saveSession(current, path);
 }
 
 function ensureProFields(session) {
@@ -1394,7 +1464,6 @@ function ensureProFields(session) {
       tags: [],
       autoTags: [],
       favorite: false,
-      learning: null,
       processedAt: null
     };
   }
@@ -1411,38 +1480,63 @@ async function saveSession(session, path) {
 }
 
 // ============================================================
-// LIBRARY MENU
+// LIBRARY
 // ============================================================
 
 async function runLibrary(config) {
-  const choice = await Shared.chooseFromList("Library", [
-    "Search",
-    "Favorites",
-    "Browse All",
-    "By Tag",
-    "Export Conversation"
-  ]);
-  if (choice === -1) {
+  const choice = await Shared.presentTableMenu({
+    title: "Library",
+    subtitle: "Find and export conversations",
+    sections: [
+      {
+        rows: [
+          {
+            id: "search",
+            title: "Search",
+            subtitle: "People, titles, tags, transcript",
+            symbol: "magnifyingglass"
+          },
+          {
+            id: "favorites",
+            title: "Favorites",
+            subtitle: "Starred conversations",
+            symbol: "star.fill"
+          },
+          {
+            id: "browse",
+            title: "All Conversations",
+            subtitle: "Newest first",
+            symbol: "list.bullet"
+          },
+          {
+            id: "export",
+            title: "Export",
+            subtitle: "Markdown, JSON, TXT, HTML",
+            symbol: "square.and.arrow.up"
+          }
+        ]
+      }
+    ]
+  });
+
+  if (!choice) {
     return;
   }
 
   switch (choice) {
-    case 0:
+    case "search":
       await runSearch();
       break;
-    case 1:
+    case "favorites":
       await browseFiltered(
         "Favorites",
         (s) => ensureProFields(s).intelligence.favorite
       );
       break;
-    case 2:
+    case "browse":
       await browseFiltered("All Conversations", () => true);
       break;
-    case 3:
-      await browseByTag();
-      break;
-    case 4:
+    case "export":
       await exportFromLibrary();
       break;
   }
@@ -1479,8 +1573,10 @@ async function runSearch() {
       continue;
     }
 
-    const snippet = findSnippet(haystack, needle, session);
-    hits.push({ session: pro, snippet });
+    hits.push({
+      session: pro,
+      snippet: findSnippet(needle, session)
+    });
   }
 
   if (hits.length === 0) {
@@ -1488,23 +1584,29 @@ async function runSearch() {
     return;
   }
 
-  const labels = hits.map(
-    (h) =>
-      `${h.session.person.name} — ${Shared.formatDate(h.session.session.startedAt)}\n…${h.snippet}…`
-  );
-  const choice = await Shared.chooseFromList(
-    `${hits.length} result${hits.length === 1 ? "" : "s"}`,
-    labels.map((l) => l.replace(/\n/g, " · "))
-  );
-  if (choice === -1) {
+  const choice = await Shared.presentTableMenu({
+    title: "Search Results",
+    subtitle: `${hits.length} match${hits.length === 1 ? "" : "es"}`,
+    sections: [
+      {
+        rows: hits.map((hit, index) => ({
+          id: String(index),
+          title: `${hit.session.intelligence.favorite ? "★ " : ""}${hit.session.person.name}`,
+          subtitle: `${Shared.formatDate(hit.session.session.startedAt)} · ${hit.snippet}`,
+          symbol: "text.bubble"
+        }))
+      }
+    ]
+  });
+
+  if (choice == null) {
     return;
   }
-  await openSessionActions(hits[choice].session);
+  await openSessionActions(hits[Number(choice)].session);
 }
 
-function findSnippet(haystack, needle, session) {
-  const turns = session.turns || [];
-  for (const turn of turns) {
+function findSnippet(needle, session) {
+  for (const turn of session.turns || []) {
     const blob = `${turn.sourceText} ${turn.translatedText}`;
     if (blob.toLowerCase().includes(needle)) {
       const idx = blob.toLowerCase().indexOf(needle);
@@ -1523,108 +1625,102 @@ async function browseFiltered(title, predicate) {
     await Shared.showError(`No conversations in ${title}.`);
     return;
   }
-  const labels = sessions.map(sessionLabel);
-  const choice = await Shared.chooseFromList(title, labels);
-  if (choice === -1) {
-    return;
-  }
-  await openSessionActions(sessions[choice]);
-}
 
-async function browseByTag() {
-  const sessions = (await Conversation.loadAllSessions()).map(ensureProFields);
-  const tagSet = new Set();
-  for (const s of sessions) {
-    for (const tag of [
-      ...(s.intelligence.tags || []),
-      ...(s.intelligence.autoTags || [])
-    ]) {
-      tagSet.add(tag);
-    }
-  }
-  const tags = [...tagSet].sort();
-  if (tags.length === 0) {
-    await Shared.showError("No tags yet. End a conversation in Pro to auto-tag.");
-    return;
-  }
-  const choice = await Shared.chooseFromList("Tags", tags);
-  if (choice === -1) {
-    return;
-  }
-  const tag = tags[choice];
-  await browseFiltered(`Tag: ${tag}`, (s) => {
-    const all = [
-      ...(s.intelligence.tags || []),
-      ...(s.intelligence.autoTags || [])
-    ];
-    return all.includes(tag);
+  const choice = await Shared.presentTableMenu({
+    title,
+    subtitle: `${sessions.length} conversation${sessions.length === 1 ? "" : "s"}`,
+    sections: [
+      {
+        rows: sessions.map((session, index) => {
+          const tags = Shared.unique([
+            ...(session.intelligence.tags || []),
+            ...(session.intelligence.autoTags || [])
+          ]).slice(0, 3);
+          return {
+            id: String(index),
+            title: `${session.intelligence.favorite ? "★ " : ""}${session.person.name}`,
+            subtitle: `${Shared.formatDate(session.session.startedAt)} · ${session.session.turnCount} turns${tags.length ? ` · ${tags.join(", ")}` : ""}`,
+            symbol: "bubble.left.and.bubble.right",
+            disclosure: true
+          };
+        })
+      }
+    ]
   });
-}
 
-function sessionLabel(session) {
-  const star = session.intelligence?.favorite ? "★ " : "";
-  const tags = [
-    ...(session.intelligence?.tags || []),
-    ...(session.intelligence?.autoTags || [])
-  ].slice(0, 3);
-  const tagPart = tags.length ? ` · ${tags.join(", ")}` : "";
-  return `${star}${session.person.name} — ${Shared.formatDate(session.session.startedAt)} — ${session.session.turnCount} turns${tagPart}`;
+  if (choice == null) {
+    return;
+  }
+  await openSessionActions(sessions[Number(choice)]);
 }
 
 async function openSessionActions(session) {
   const pro = ensureProFields(session);
-  const alert = new Alert();
-  alert.title = pro.person.name;
-  alert.message = [
-    pro.metadata.title || "Untitled",
-    pro.intelligence.summary
-      ? `\n${pro.intelligence.summary.slice(0, 280)}`
-      : "",
-    `\nTurns: ${pro.session.turnCount}`,
-    pro.intelligence.favorite ? "\n★ Favorite" : ""
-  ].join("");
-  alert.addAction("View Transcript");
-  alert.addAction("View Summary");
-  alert.addAction(pro.intelligence.favorite ? "Unfavorite" : "Favorite");
-  alert.addAction("Edit Tags");
-  alert.addAction("Export");
-  alert.addAction("Reprocess Intelligence");
-  alert.addCancelAction("Close");
-
-  const choice = await alert.presentAlert();
+  const tags = Shared.unique([
+    ...(pro.intelligence.tags || []),
+    ...(pro.intelligence.autoTags || [])
+  ]);
   const path = Conversation.getConversationFilePath(pro);
 
-  if (choice === 0) {
+  const choice = await Shared.presentTableMenu({
+    title: pro.person.name,
+    subtitle: pro.metadata.title || "Conversation",
+    sections: [
+      {
+        header: "Overview",
+        rows: [
+          {
+            id: "transcript",
+            title: "Transcript",
+            subtitle: `${pro.session.turnCount} turns`,
+            symbol: "doc.text"
+          },
+          {
+            id: "summary",
+            title: "Summary",
+            subtitle: pro.intelligence.summary
+              ? pro.intelligence.summary.slice(0, 60)
+              : "No summary yet",
+            symbol: "text.alignleft"
+          }
+        ]
+      },
+      {
+        header: "Actions",
+        rows: [
+          {
+            id: "favorite",
+            title: pro.intelligence.favorite ? "Unfavorite" : "Favorite",
+            subtitle: tags.length ? tags.join(", ") : "No tags",
+            symbol: pro.intelligence.favorite ? "star.fill" : "star"
+          },
+          {
+            id: "export",
+            title: "Export",
+            subtitle: "Markdown, JSON, TXT, HTML",
+            symbol: "square.and.arrow.up"
+          }
+        ]
+      }
+    ]
+  });
+
+  if (!choice) {
+    return;
+  }
+
+  if (choice === "transcript") {
     await showTranscript(pro);
-  } else if (choice === 1) {
+  } else if (choice === "summary") {
     await Shared.showSuccess(
       "Summary",
       pro.intelligence.summary || "No summary yet."
     );
-  } else if (choice === 2) {
+  } else if (choice === "favorite") {
     pro.intelligence.favorite = !pro.intelligence.favorite;
     await saveSession(pro, path);
-  } else if (choice === 3) {
-    const current = Shared.unique([
-      ...(pro.intelligence.tags || []),
-      ...(pro.intelligence.autoTags || [])
-    ]).join(", ");
-    const edited = await Shared.promptForText(
-      "Edit Tags",
-      "Comma-separated tags.",
-      current
-    );
-    if (edited !== null) {
-      pro.intelligence.tags = edited
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-      await saveSession(pro, path);
-    }
-  } else if (choice === 4) {
+  } else if (choice === "export") {
     await exportSessionInteractive(pro);
-  } else if (choice === 5) {
-    await processCompletedSession(pro, path);
   }
 }
 
@@ -1641,15 +1737,11 @@ async function showTranscript(session) {
     lines.push(`→ ${turn.translatedText}`);
     lines.push("");
   }
-  const alert = new Alert();
-  alert.title = session.person.name;
-  alert.message = lines.join("\n");
-  alert.addAction("Close");
-  await alert.presentAlert();
+  await Shared.showSuccess(session.person.name, lines.join("\n"));
 }
 
 // ============================================================
-// SUMMARIES / TAGS / MEMORY / LEARNING
+// SUMMARY / TAGS
 // ============================================================
 
 function detectAutoTags(session) {
@@ -1676,18 +1768,6 @@ function detectAutoTags(session) {
   return Shared.unique(tags);
 }
 
-async function buildSummary(session) {
-  const openai = optionalOpenAIKey();
-  if (openai) {
-    try {
-      return await summarizeWithOpenAI(session, openai);
-    } catch (error) {
-      console.error(`OpenAI summary failed: ${error.message}`);
-    }
-  }
-  return buildExtractiveSummary(session);
-}
-
 function buildExtractiveSummary(session) {
   const turns = session.turns || [];
   const lines = [];
@@ -1702,11 +1782,6 @@ function buildExtractiveSummary(session) {
     lines.push(`Topics: ${tags.join(", ")}`);
   }
 
-  const topics = topKeywords(turns, 8);
-  if (topics.length) {
-    lines.push(`Keywords: ${topics.join(", ")}`);
-  }
-
   const sample = turns.slice(0, 3).map((t) => {
     const who = t.speaker === "me" ? "You" : session.person.name;
     return `• ${who}: ${t.translatedText || t.sourceText}`;
@@ -1715,213 +1790,99 @@ function buildExtractiveSummary(session) {
     lines.push("Highlights:");
     lines.push(...sample);
   }
-
-  const followUps = turns
-    .filter((t) => /\?/.test(t.sourceText) || /\?/.test(t.translatedText))
-    .slice(0, 3)
-    .map((t) => `• ${t.translatedText || t.sourceText}`);
-  if (followUps.length) {
-    lines.push("Questions raised:");
-    lines.push(...followUps);
-  }
-
   return lines.join("\n");
 }
 
-function topKeywords(turns, limit) {
-  const stop = new Set([
-    "the", "a", "an", "and", "or", "to", "of", "in", "on", "for", "is", "are",
-    "was", "were", "i", "you", "we", "they", "he", "she", "it", "my", "your",
-    "de", "la", "el", "que", "en", "un", "una", "es", "y", "o", "por", "con",
-    "this", "that", "with", "from", "at", "as", "be", "have", "has", "had",
-    "me", "do", "did", "not", "but", "if", "so", "what", "where", "when", "how"
-  ]);
-  const counts = {};
-  for (const turn of turns) {
-    const words = `${turn.sourceText} ${turn.translatedText}`
-      .toLowerCase()
-      .replace(/[^\w\u00C0-\u024F\s]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 3 && !stop.has(w));
-    for (const word of words) {
-      counts[word] = (counts[word] || 0) + 1;
-    }
-  }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([word]) => word);
-}
-
-function extractMemoryCandidates(session) {
-  const patterns = [
-    { label: "Likes", re: /\b(i like|me gusta|j'aime|ich mag)\b(.{0,60})/gi },
-    { label: "Dislikes", re: /\b(i (don't|do not) like|no me gusta|je n'aime)\b(.{0,60})/gi },
-    { label: "Planning", re: /\b(next (week|month)|planning|voy a|je vais|ich werde)\b(.{0,60})/gi },
-    { label: "Family", re: /\b(my (wife|husband|son|daughter|mom|dad|dog|cat)|mi (esposa|hijo|hija|perro))\b(.{0,60})/gi },
-    { label: "Birthday", re: /\b(birthday|cumpleaños|anniversaire)\b(.{0,40})/gi }
-  ];
-  const blob = (session.turns || [])
-    .map((t) => `${t.sourceText} / ${t.translatedText}`)
-    .join("\n");
-  const out = [];
-  for (const pattern of patterns) {
-    let match;
-    const re = new RegExp(pattern.re.source, pattern.re.flags);
-    while ((match = re.exec(blob)) !== null) {
-      out.push(`${pattern.label}: ${match[0].replace(/\s+/g, " ").trim()}`);
-      if (out.length >= 8) {
-        return Shared.unique(out);
-      }
-    }
-  }
-  return Shared.unique(out);
-}
-
-function buildLearningHints(session) {
-  const turns = session.turns || [];
-  const vocab = topKeywords(turns, 12);
-  const questions = turns.filter(
-    (t) => /\?/.test(t.sourceText) || /\?/.test(t.translatedText)
-  ).length;
-  return {
-    wordsEncountered: vocab.length,
-    suggestedVocabulary: vocab,
-    questionsAsked: questions,
-    turnCount: turns.length
-  };
-}
-
-function optionalOpenAIKey() {
-  if (!Keychain.contains(OPENAI_KEYCHAIN_KEY)) {
-    return null;
-  }
-  const key = Keychain.get(OPENAI_KEYCHAIN_KEY);
-  return key && key.trim() ? key.trim() : null;
-}
-
-async function summarizeWithOpenAI(session, apiKey) {
-  const transcript = (session.turns || [])
-    .map((t) => {
-      const who = t.speaker === "me" ? "Me" : session.person.name;
-      return `${who} [${t.sourceLanguage}]: ${t.sourceText}\n→ [${t.targetLanguage}]: ${t.translatedText}`;
-    })
-    .join("\n\n")
-    .slice(0, 12000);
-
-  const request = new Request("https://api.openai.com/v1/chat/completions");
-  request.method = "POST";
-  request.timeoutInterval = OPENAI_TIMEOUT;
-  request.headers = {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json"
-  };
-  request.body = JSON.stringify({
-    model: "gpt-4o-mini",
-    temperature: 0.3,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Summarize a bilingual conversation. Return plain text with: Topics, Key decisions, Follow-ups, Names/places/dates, Action items. Be concise."
-      },
-      {
-        role: "user",
-        content: `Person: ${session.person.name}\nContext: ${session.metadata?.context || "n/a"}\n\nTranscript:\n${transcript}`
-      }
-    ]
-  });
-
-  const response = await request.loadJSON();
-  const text = response?.choices?.[0]?.message?.content;
-  if (!text) {
-    throw new Error("OpenAI returned an empty summary.");
-  }
-  return text.trim();
-}
-
 // ============================================================
-// PEOPLE DIRECTORY
+// PEOPLE
 // ============================================================
 
 async function runPeopleDirectory(config) {
   const people = await loadPeopleProfiles();
-  const labels = people.map((p) => {
-    const langs = (p.metadata?.languages || []).join("/");
-    const count = p.stats?.conversationCount || 0;
-    return `${p.name}${langs ? ` · ${langs}` : ""} · ${count} chats`;
-  });
-  labels.push("Refresh Stats From Conversations");
+  if (people.length === 0) {
+    await Shared.showError("No people yet. Start a conversation first.");
+    return;
+  }
 
-  const choice = await Shared.chooseFromList(
-    "People",
-    labels,
-    "Profiles linked to conversations."
-  );
-  if (choice === -1) {
+  const choice = await Shared.presentTableMenu({
+    title: "People",
+    subtitle: `${people.length} profile${people.length === 1 ? "" : "s"}`,
+    sections: [
+      {
+        rows: people.map((person, index) => ({
+          id: String(index),
+          title: person.name,
+          subtitle: [
+            person.stats?.conversationCount
+              ? `${person.stats.conversationCount} chats`
+              : "0 chats",
+            person.metadata?.languages?.length
+              ? person.metadata.languages.join(", ")
+              : null
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          symbol: "person.crop.circle",
+          disclosure: true
+        }))
+      }
+    ]
+  });
+
+  if (choice == null) {
     return;
   }
-  if (choice === people.length) {
-    await refreshAllPeopleStats();
-    await Shared.showSuccess("People", "Stats refreshed from conversations.");
-    return;
-  }
-  await openPersonProfile(people[choice], config);
+  await openPersonProfile(people[Number(choice)], config);
 }
 
 async function openPersonProfile(person, config) {
   const sessions = (await Conversation.loadAllSessions()).filter(
     (s) => s.person.id === person.id || s.person.name === person.name
   );
-  const alert = new Alert();
-  alert.title = person.name;
-  alert.message = [
-    `Conversations: ${person.stats?.conversationCount || sessions.length}`,
-    person.stats?.lastSeen
-      ? `Last seen: ${Shared.formatDate(person.stats.lastSeen)}`
-      : "",
-    person.metadata?.country ? `Country: ${person.metadata.country}` : "",
-    person.metadata?.languages?.length
-      ? `Languages: ${person.metadata.languages.join(", ")}`
-      : "",
-    person.metadata?.notes ? `\nNotes: ${person.metadata.notes}` : "",
-    person.memory?.length
-      ? `\nMemory:\n${person.memory.map((m) => `• ${m}`).join("\n")}`
-      : ""
-  ]
-    .filter(Boolean)
-    .join("\n");
 
-  alert.addAction("Edit Profile");
-  alert.addAction("View Conversations");
-  alert.addAction("Clear Memory");
-  alert.addCancelAction("Close");
-  const choice = await alert.presentAlert();
+  const choice = await Shared.presentTableMenu({
+    title: person.name,
+    subtitle: person.stats?.lastSeen
+      ? `Last seen ${Shared.formatDate(person.stats.lastSeen)}`
+      : "Profile",
+    sections: [
+      {
+        rows: [
+          {
+            id: "chats",
+            title: "Conversations",
+            subtitle: `${sessions.length} saved`,
+            symbol: "bubble.left.and.bubble.right",
+            disclosure: true
+          },
+          {
+            id: "edit",
+            title: "Edit Profile",
+            subtitle: person.metadata?.notes
+              ? person.metadata.notes.slice(0, 48)
+              : "Notes, country, languages",
+            symbol: "pencil"
+          }
+        ]
+      }
+    ]
+  });
 
-  if (choice === 0) {
-    await editPersonProfile(person, config);
-  } else if (choice === 1) {
+  if (!choice) {
+    return;
+  }
+
+  if (choice === "chats") {
     if (sessions.length === 0) {
       await Shared.showError("No conversations for this person.");
       return;
     }
-    const labels = sessions.map(sessionLabel);
-    const pick = await Shared.chooseFromList(
-      `${person.name}'s Conversations`,
-      labels
+    await browseFiltered(
+      person.name,
+      (s) => s.person.id === person.id || s.person.name === person.name
     );
-    if (pick !== -1) {
-      await openSessionActions(ensureProFields(sessions[pick]));
-    }
-  } else if (choice === 2) {
-    const ok = await Shared.confirm(
-      "Clear Memory?",
-      `Remove saved memory for ${person.name}?`
-    );
-    if (ok) {
-      person.memory = [];
-      await upsertPerson(person);
-    }
+  } else if (choice === "edit") {
+    await editPersonProfile(person, config);
   }
 }
 
@@ -1962,7 +1923,7 @@ async function editPersonProfile(person, config) {
     .map((l) => l.trim())
     .filter(Boolean);
   await upsertPerson(person);
-  await Shared.showSuccess("Saved", `${person.name} profile updated.`);
+  await Shared.showSuccess("Saved", `${person.name} updated.`);
 }
 
 async function loadPeopleProfiles() {
@@ -1971,7 +1932,6 @@ async function loadPeopleProfiles() {
   return people.map((p) => ({
     ...p,
     metadata: p.metadata || { languages: [], country: "", notes: "" },
-    memory: p.memory || [],
     stats: p.stats || { conversationCount: 0, lastSeen: null }
   }));
 }
@@ -1987,16 +1947,6 @@ async function upsertPerson(person) {
   await Shared.saveJSON(Shared.PEOPLE_FILE, people);
 }
 
-async function appendPersonMemory(personId, memories) {
-  const people = await loadPeopleProfiles();
-  const person = people.find((p) => p.id === personId);
-  if (!person) {
-    return;
-  }
-  person.memory = Shared.unique([...(person.memory || []), ...memories]);
-  await Shared.saveJSON(Shared.PEOPLE_FILE, people);
-}
-
 async function touchPersonFromSession(session) {
   const people = await loadPeopleProfiles();
   let person = people.find((p) => p.id === session.person.id);
@@ -2006,7 +1956,6 @@ async function touchPersonFromSession(session) {
       name: session.person.name,
       createdAt: new Date().toISOString(),
       metadata: { languages: [], country: "", notes: "" },
-      memory: [],
       stats: { conversationCount: 0, lastSeen: null }
     };
     people.push(person);
@@ -2014,205 +1963,21 @@ async function touchPersonFromSession(session) {
 
   const sessions = await Conversation.loadAllSessions();
   const theirs = sessions.filter(
-    (s) => s.person.id === session.person.id || s.person.name === session.person.name
+    (s) =>
+      s.person.id === session.person.id || s.person.name === session.person.name
   );
 
   person.stats = person.stats || {};
   person.stats.lastSeen =
     session.session.endedAt || session.session.lastActivityAt;
   person.stats.conversationCount = Math.max(theirs.length, 1);
-  const langs = Shared.unique([
-    ...(person.metadata?.languages || []),
+  person.metadata = person.metadata || {};
+  person.metadata.languages = Shared.unique([
+    ...(person.metadata.languages || []),
     session.languages?.primary,
     session.languages?.conversation
   ]);
-  person.metadata = person.metadata || {};
-  person.metadata.languages = langs;
   await Shared.saveJSON(Shared.PEOPLE_FILE, people);
-}
-
-async function refreshAllPeopleStats() {
-  const people = await loadPeopleProfiles();
-  const sessions = await Conversation.loadAllSessions();
-  for (const person of people) {
-    const theirs = sessions.filter(
-      (s) => s.person.id === person.id || s.person.name === person.name
-    );
-    person.stats = {
-      conversationCount: theirs.length,
-      lastSeen: theirs[0]?.session?.endedAt || theirs[0]?.session?.startedAt || null
-    };
-  }
-  await Shared.saveJSON(Shared.PEOPLE_FILE, people);
-}
-
-// ============================================================
-// STATISTICS
-// ============================================================
-
-async function runStatistics() {
-  const sessions = (await Conversation.loadAllSessions()).map(ensureProFields);
-  const people = await loadPeopleProfiles();
-  if (sessions.length === 0) {
-    await Shared.showError("No conversations yet.");
-    return;
-  }
-
-  let totalTurns = 0;
-  let totalDuration = 0;
-  let totalWords = 0;
-  const langCounts = {};
-  let longest = sessions[0];
-
-  for (const s of sessions) {
-    totalTurns += s.session.turnCount || 0;
-    totalDuration += s.session.durationSeconds || 0;
-    if ((s.session.durationSeconds || 0) > (longest.session.durationSeconds || 0)) {
-      longest = s;
-    }
-    for (const turn of s.turns || []) {
-      totalWords += `${turn.sourceText} ${turn.translatedText}`
-        .split(/\s+/)
-        .filter(Boolean).length;
-      const lang = Shared.normalizeLanguage(turn.sourceLanguage);
-      langCounts[lang] = (langCounts[lang] || 0) + 1;
-    }
-  }
-
-  const topLang = Object.entries(langCounts).sort((a, b) => b[1] - a[1])[0];
-  const avgMinutes = sessions.length
-    ? Math.round(totalDuration / sessions.length / 60)
-    : 0;
-
-  const message = [
-    `Conversations: ${sessions.length}`,
-    `People: ${people.length}`,
-    `Total turns: ${totalTurns}`,
-    `Words translated: ${totalWords.toLocaleString()}`,
-    `Average length: ${avgMinutes} min`,
-    `Most spoken source: ${topLang ? topLang[0] : "n/a"}`,
-    `Longest: ${longest.person.name} (${Shared.formatDuration(longest.session.durationSeconds || 0)})`,
-    `Favorites: ${sessions.filter((s) => s.intelligence.favorite).length}`
-  ].join("\n");
-
-  await Shared.showSuccess("Statistics", message);
-}
-
-// ============================================================
-// TIMELINE
-// ============================================================
-
-async function runTimeline() {
-  const buckets = [
-    { id: "today", label: "Today" },
-    { id: "yesterday", label: "Yesterday" },
-    { id: "week", label: "Last 7 Days" },
-    { id: "month", label: "This Month" },
-    { id: "older", label: "Older" }
-  ];
-  const choice = await Shared.chooseFromList(
-    "Timeline",
-    buckets.map((b) => b.label)
-  );
-  if (choice === -1) {
-    return;
-  }
-  const bucket = buckets[choice].id;
-  await browseFiltered(buckets[choice].label, (s) =>
-    inTimelineBucket(s.session.startedAt, bucket)
-  );
-}
-
-function inTimelineBucket(iso, bucket) {
-  const date = new Date(iso);
-  const now = new Date();
-  const startOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
-  const startOfYesterday = new Date(startOfToday);
-  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-  const weekAgo = new Date(startOfToday);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  if (bucket === "today") {
-    return date >= startOfToday;
-  }
-  if (bucket === "yesterday") {
-    return date >= startOfYesterday && date < startOfToday;
-  }
-  if (bucket === "week") {
-    return date >= weekAgo;
-  }
-  if (bucket === "month") {
-    return date >= monthStart;
-  }
-  return date < monthStart;
-}
-
-// ============================================================
-// LEARNING MODE
-// ============================================================
-
-async function runLearningMode() {
-  const sessions = (await Conversation.loadAllSessions()).map(ensureProFields);
-  if (sessions.length === 0) {
-    await Shared.showError("No conversations to learn from.");
-    return;
-  }
-  const labels = sessions.map(sessionLabel);
-  const choice = await Shared.chooseFromList("Learning Mode", labels);
-  if (choice === -1) {
-    return;
-  }
-  const session = sessions[choice];
-  const learning =
-    session.intelligence.learning || buildLearningHints(session);
-  const message = [
-    `Turns: ${learning.turnCount}`,
-    `Questions: ${learning.questionsAsked}`,
-    `Vocabulary hits: ${learning.wordsEncountered}`,
-    "",
-    "Practice words:",
-    ...(learning.suggestedVocabulary || []).map((w) => `• ${w}`)
-  ].join("\n");
-  await Shared.showSuccess("Learning", message);
-}
-
-// ============================================================
-// VOICE PROFILES
-// ============================================================
-
-async function runVoiceProfiles(config) {
-  const engine = config.speech.engine;
-  const lines = [`Engine: ${engine}`];
-  if (engine === "elevenlabs") {
-    const voices = config.speech.elevenlabs.voices || {};
-    const keys = Object.keys(voices);
-    if (keys.length === 0) {
-      lines.push("No ElevenLabs voices configured. Use Settings.");
-    } else {
-      for (const code of keys) {
-        lines.push(
-          `${Shared.getLanguageDisplayName(code)} → ${voices[code].name || voices[code].voiceId}`
-        );
-      }
-    }
-  } else {
-    lines.push(
-      `Apple rate: ${config.speech.apple.rate}`,
-      `Apple pitch: ${config.speech.apple.pitch}`,
-      "Configure ElevenLabs voices in Settings for per-language AI voices."
-    );
-  }
-  lines.push(
-    "",
-    `Primary: ${Shared.getLanguageDisplayName(config.languages.primary)}`,
-    `Conversation: ${Shared.getLanguageDisplayName(config.languages.conversation)}`
-  );
-  await Shared.showSuccess("Voice Profiles", lines.join("\n"));
 }
 
 // ============================================================
@@ -2225,29 +1990,46 @@ async function exportFromLibrary() {
     await Shared.showError("No conversations to export.");
     return;
   }
-  const choice = await Shared.chooseFromList(
-    "Export Conversation",
-    sessions.map(sessionLabel)
-  );
-  if (choice === -1) {
+
+  const choice = await Shared.presentTableMenu({
+    title: "Export Conversation",
+    subtitle: "Choose a conversation",
+    sections: [
+      {
+        rows: sessions.map((session, index) => ({
+          id: String(index),
+          title: session.person.name,
+          subtitle: Shared.formatDate(session.session.startedAt),
+          symbol: "square.and.arrow.up",
+          disclosure: true
+        }))
+      }
+    ]
+  });
+  if (choice == null) {
     return;
   }
-  await exportSessionInteractive(sessions[choice]);
+  await exportSessionInteractive(sessions[Number(choice)]);
 }
 
 async function exportSessionInteractive(session) {
-  const formatChoice = await Shared.chooseFromList("Export Format", [
-    "Markdown",
-    "JSON",
-    "TXT",
-    "HTML"
-  ]);
-  if (formatChoice === -1) {
+  const formatChoice = await Shared.presentTableMenu({
+    title: "Export Format",
+    sections: [
+      {
+        rows: [
+          { id: "md", title: "Markdown", symbol: "doc.richtext" },
+          { id: "json", title: "JSON", symbol: "curlybraces" },
+          { id: "txt", title: "Plain Text", symbol: "doc.plaintext" },
+          { id: "html", title: "HTML", symbol: "chevron.left.forwardslash.chevron.right" }
+        ]
+      }
+    ]
+  });
+  if (!formatChoice) {
     return;
   }
-  const formats = ["md", "json", "txt", "html"];
-  const format = formats[formatChoice];
-  const path = await exportSession(session, format);
+  const path = await exportSession(session, formatChoice);
   Pasteboard.copy(path);
   await Shared.showSuccess(
     "Exported",
@@ -2317,29 +2099,17 @@ function toMarkdown(session) {
     "",
     `- **Person:** ${session.person.name}`,
     `- **Started:** ${session.session.startedAt}`,
-    `- **Ended:** ${session.session.endedAt || ""}`,
     `- **Turns:** ${session.session.turnCount}`,
     ""
   ];
   if (session.intelligence?.summary) {
     lines.push("## Summary", "", session.intelligence.summary, "");
   }
-  const tags = [
-    ...(session.intelligence?.tags || []),
-    ...(session.intelligence?.autoTags || [])
-  ];
-  if (tags.length) {
-    lines.push(`**Tags:** ${tags.join(", ")}`, "");
-  }
   lines.push("## Transcript", "");
   for (const turn of session.turns || []) {
     const speaker = turn.speaker === "me" ? "Me" : session.person.name;
-    lines.push(`### ${speaker} · ${turn.timestamp}`);
-    lines.push("");
-    lines.push(turn.sourceText);
-    lines.push("");
-    lines.push(`> ${turn.translatedText}`);
-    lines.push("");
+    lines.push(`### ${speaker} · ${turn.timestamp}`, "", turn.sourceText, "");
+    lines.push(`> ${turn.translatedText}`, "");
   }
   return lines.join("\n");
 }
@@ -2369,36 +2139,17 @@ ${session.intelligence?.summary ? `<section><h2>Summary</h2><pre>${esc(session.i
 
 // SmartTranslatePro.js
 //
-// SmartTranslate Pro — full feature entry for Scriptable.
+// SmartTranslate Pro — lean Scriptable entry.
 //
-// Includes everything in v1 plus:
-//   Library (search, favorites, tags, export)
-//   People directory + memory
-//   Statistics · Timeline · Learning Mode · Voice Profiles
-//   Post-conversation intelligence (summary, tags, memory, export)
+// Home:
+//   Translate › · Conversation · Library · People · Settings
 //
-// Requires (same Scriptable folder):
-//   SmartTranslateShared.js
-//   SmartTranslateConversation.js
-//   SmartTranslateProKit.js
+// Keep: search/favorites/export, people, light post-session summary
+// Dropped from UI: Insights (timeline/stats/learning/voices), long end wizard
 //
-// Storage: same iCloud SmartTranslate/ tree as v1, plus:
-//   SmartTranslate/exports/
+// Requires (modular) or paste scripts/dist/SmartTranslatePro.js
 //
-// Keychain:
-//   SMART_TRANSLATE_DEEPL_API_KEY
-//   SMART_TRANSLATE_ELEVENLABS_API_KEY
-//   SMART_TRANSLATE_OPENAI_API_KEY   (optional, richer summaries)
-//
-// Version: 1.0.0-pro
-//
-// IMPORTANT (Scriptable):
-// Create FOUR scripts with these EXACT names:
-//   SmartTranslateShared
-//   SmartTranslateConversation
-//   SmartTranslateProKit
-//   SmartTranslatePro
-// Or paste scripts/dist/SmartTranslatePro.js as ONE script.
+// Version: 1.1.0-lean
 
 async function main() {
   let config = await Shared.loadConfig();
@@ -2413,14 +2164,24 @@ async function main() {
     if (isFirstRun) {
       await Shared.showSuccess(
         "Setup Complete",
-        "SmartTranslate Pro is ready. Run again to open the full menu."
+        "SmartTranslate Pro is ready."
       );
       return;
     }
   }
 
-  const action = await showMainMenu(config);
+  // Stay in the home UITable until the user dismisses it.
+  while (true) {
+    const action = await showMainMenu(config);
+    if (!action || action === "cancel") {
+      break;
+    }
+    await runProAction(action, config);
+    config = (await Shared.loadConfig()) || config;
+  }
+}
 
+async function runProAction(action, config) {
   switch (action) {
     case "type":
       await runType(config);
@@ -2442,18 +2203,6 @@ async function main() {
     case "people":
       await Pro.runPeopleDirectory(config);
       break;
-    case "timeline":
-      await Pro.runTimeline();
-      break;
-    case "stats":
-      await Pro.runStatistics();
-      break;
-    case "learning":
-      await Pro.runLearningMode();
-      break;
-    case "voices":
-      await Pro.runVoiceProfiles(config);
-      break;
     case "settings": {
       const newConfig = await runSetupWizard(false, config);
       if (newConfig) {
@@ -2467,58 +2216,116 @@ async function main() {
 }
 
 // ============================================================
-// MAIN MENU
+// HOME MENU
 // ============================================================
 
 async function showMainMenu(config) {
-  const alert = new Alert();
-  alert.title = "SmartTranslate Pro";
   const engine = config.speech.engine === "apple" ? "Apple" : "ElevenLabs";
-  alert.message = `Speech: ${engine}\n${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
-  alert.addAction("Type");
-  alert.addAction("Paste");
-  alert.addAction("Dictate");
-  alert.addAction("Conversation");
-  alert.addAction("Library");
-  alert.addAction("People");
-  alert.addAction("Timeline");
-  alert.addAction("Statistics");
-  alert.addAction("Learning");
-  alert.addAction("Voice Profiles");
-  alert.addAction("Settings");
-  alert.addCancelAction("Cancel");
+  const pair = `${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
 
-  const choice = await alert.presentSheet();
-  switch (choice) {
-    case 0:
-      return "type";
-    case 1:
-      return "paste";
-    case 2:
-      return "dictate";
-    case 3:
-      return "conversation";
-    case 4:
-      return "library";
-    case 5:
-      return "people";
-    case 6:
-      return "timeline";
-    case 7:
-      return "stats";
-    case 8:
-      return "learning";
-    case 9:
-      return "voices";
-    case 10:
-      return "settings";
-    default:
+  while (true) {
+    const choice = await Shared.presentTableMenu({
+      title: "SmartTranslate Pro",
+      subtitle: `${pair} · ${engine}`,
+      sections: [
+        {
+          header: "Translate",
+          rows: [
+            {
+              id: "translate",
+              title: "Quick Translate",
+              subtitle: "Type, paste, or dictate",
+              symbol: "character.bubble",
+              disclosure: true
+            },
+            {
+              id: "conversation",
+              title: "Conversation",
+              subtitle: "Multi-turn with a person",
+              symbol: "person.2"
+            }
+          ]
+        },
+        {
+          header: "Review",
+          rows: [
+            {
+              id: "library",
+              title: "Library",
+              subtitle: "Search, favorites, export",
+              symbol: "books.vertical"
+            },
+            {
+              id: "people",
+              title: "People",
+              subtitle: "Profiles and past chats",
+              symbol: "person.crop.circle"
+            }
+          ]
+        },
+        {
+          header: "App",
+          rows: [
+            {
+              id: "settings",
+              title: "Settings",
+              subtitle: "Languages, keys, speech",
+              symbol: "gearshape"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
       return "cancel";
+    }
+
+    if (choice === "translate") {
+      const nested = await showTranslateMenu();
+      if (!nested) {
+        continue;
+      }
+      return nested;
+    }
+
+    return choice;
   }
 }
 
+async function showTranslateMenu() {
+  return await Shared.presentTableMenu({
+    title: "Quick Translate",
+    subtitle: "One shot",
+    sections: [
+      {
+        rows: [
+          {
+            id: "type",
+            title: "Type",
+            subtitle: "Enter text",
+            symbol: "keyboard"
+          },
+          {
+            id: "paste",
+            title: "Paste",
+            subtitle: "From clipboard",
+            symbol: "doc.on.clipboard"
+          },
+          {
+            id: "dictate",
+            title: "Dictate",
+            subtitle: "Speak to translate",
+            symbol: "mic"
+          }
+        ]
+      }
+    ]
+  });
+}
+
 // ============================================================
-// ONE-SHOT WORKFLOWS
+// ONE-SHOT
 // ============================================================
 
 async function runType(config) {
@@ -2557,7 +2364,7 @@ async function runDictate(config) {
 }
 
 // ============================================================
-// SETUP / SETTINGS
+// SETUP
 // ============================================================
 
 async function runSetupWizard(isFirstRun, existingConfig) {
@@ -2567,7 +2374,7 @@ async function runSetupWizard(isFirstRun, existingConfig) {
     const welcome = new Alert();
     welcome.title = "Welcome to SmartTranslate Pro";
     welcome.message =
-      "Configure languages and API keys. Pro adds library, people, stats, learning, and export on top of v1.";
+      "Lean Pro: translate, conversations, library, and people — with a cleaner Scriptable UI.";
     welcome.addAction("Start Setup");
     await welcome.present();
   }
@@ -2575,17 +2382,11 @@ async function runSetupWizard(isFirstRun, existingConfig) {
   const deeplKey = await Shared.configureSecret(
     "DeepL API Key",
     Shared.DEEPL_KEYCHAIN_KEY,
-    "Enter your DeepL API key (use a key ending in :fx for the free tier)."
+    "Enter your DeepL API key from https://www.deepl.com/your-account/keys\n\n(API Developer plan — Free API is no longer sold for new accounts.)"
   );
   if (!deeplKey) {
     return null;
   }
-
-  await Shared.configureSecret(
-    "OpenAI API Key (Optional)",
-    Pro.OPENAI_KEYCHAIN_KEY,
-    "Optional. Enables richer conversation summaries. Leave empty / Keep Existing to skip."
-  );
 
   config.languages.primary = await Shared.chooseLanguage(
     "Your Primary Language",
@@ -2648,12 +2449,6 @@ async function runSetupWizard(isFirstRun, existingConfig) {
       config.speech.apple.rate,
       0.1,
       1.0
-    );
-    config.speech.apple.pitch = await Shared.chooseSlider(
-      "Apple Speech Pitch",
-      config.speech.apple.pitch,
-      0.5,
-      2.0
     );
   } else {
     const elevenLabsKey = await Shared.configureSecret(
@@ -2720,9 +2515,6 @@ async function configureElevenLabsVoices(config, elevenLabsKey) {
       .slice(0, Shared.MAX_VOICE_RESULTS);
 
     if (compatibleVoices.length === 0) {
-      await Shared.showError(
-        `No compatible ElevenLabs voices were found for ${langName}. Apple speech can still be used as fallback.`
-      );
       continue;
     }
 

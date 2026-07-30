@@ -55,20 +55,47 @@ async function runConversation(config, hooks = {}) {
 
 async function showConversationMenu(hooks = {}) {
   const active = await loadActiveSession();
-  const alert = new Alert();
-  alert.title = "Conversation";
+
   if (active) {
-    alert.message = `Active with ${active.person.name} · ${active.session.turnCount} turns`;
-    alert.addAction("Continue Active");
-    alert.addAction("Discard & Start New");
-    alert.addAction("History");
-    alert.addAction("End Active");
-    alert.addCancelAction("Cancel");
-    const choice = await alert.presentAlert();
-    if (choice === 0) {
-      return "continue";
+    const choice = await Shared.presentTableMenu({
+      title: "Conversation",
+      subtitle: `Active with ${active.person.name} · ${active.session.turnCount} turns`,
+      sections: [
+        {
+          rows: [
+            {
+              id: "continue",
+              title: "Continue",
+              subtitle: "Resume the active session",
+              symbol: "play.fill"
+            },
+            {
+              id: "history",
+              title: "History",
+              subtitle: "Browse saved conversations",
+              symbol: "clock"
+            },
+            {
+              id: "end",
+              title: "End Active",
+              subtitle: "Finalize and save",
+              symbol: "checkmark.circle"
+            },
+            {
+              id: "discard",
+              title: "Discard & Start New",
+              subtitle: "Delete active turns",
+              symbol: "trash"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
+      return "cancel";
     }
-    if (choice === 1) {
+    if (choice === "discard") {
       const abandon = await Shared.confirm(
         "Discard Active Conversation?",
         "This permanently discards the active conversation and its turns."
@@ -79,28 +106,37 @@ async function showConversationMenu(hooks = {}) {
       await deleteActiveSession();
       return "new";
     }
-    if (choice === 2) {
-      return "history";
-    }
-    if (choice === 3) {
+    if (choice === "end") {
       await endConversation(active, hooks);
       return "cancel";
     }
-    return "cancel";
+    return choice;
   }
 
-  alert.message = "Start a multi-turn conversation with a person.";
-  alert.addAction("New Conversation");
-  alert.addAction("History");
-  alert.addCancelAction("Cancel");
-  const choice = await alert.presentAlert();
-  if (choice === 0) {
-    return "new";
-  }
-  if (choice === 1) {
-    return "history";
-  }
-  return "cancel";
+  const choice = await Shared.presentTableMenu({
+    title: "Conversation",
+    subtitle: "Start or review",
+    sections: [
+      {
+        rows: [
+          {
+            id: "new",
+            title: "New Conversation",
+            subtitle: "Pick a person and begin",
+            symbol: "plus.bubble"
+          },
+          {
+            id: "history",
+            title: "History",
+            subtitle: "Browse saved conversations",
+            symbol: "clock"
+          }
+        ]
+      }
+    ]
+  });
+
+  return choice || "cancel";
 }
 
 async function runNewSessionFlow(config, hooks = {}) {
@@ -440,42 +476,48 @@ async function endConversation(session, hooks = {}) {
 
 async function selectOrCreatePerson() {
   const people = await loadPeople();
+  const rows = people.map((person, index) => ({
+    id: String(index),
+    title: person.name,
+    subtitle: "Existing person",
+    symbol: "person.fill"
+  }));
+  rows.push({
+    id: "new",
+    title: "New Person",
+    subtitle: "Create a profile",
+    symbol: "person.badge.plus"
+  });
 
-  const alert = new Alert();
-  alert.title = "Conversation Person";
-  alert.message = "Select an existing person or create a new one.";
-  for (const person of people) {
-    alert.addAction(person.name);
-  }
-  alert.addAction("New Person");
-  alert.addCancelAction("Cancel");
+  const choice = await Shared.presentTableMenu({
+    title: "Who are you talking to?",
+    subtitle: "Select or create",
+    sections: [{ rows }]
+  });
 
-  const choice = await alert.presentAlert();
-  if (choice === -1) {
+  if (!choice) {
     return null;
   }
 
-  if (choice < people.length) {
-    return people[choice];
+  if (choice === "new") {
+    const name = await Shared.promptForText(
+      "New Person",
+      "Enter the person's name."
+    );
+    if (!name) {
+      return null;
+    }
+    const person = {
+      id: Shared.generateUUID(),
+      name: name.trim(),
+      createdAt: new Date().toISOString()
+    };
+    people.push(person);
+    await savePeople(people);
+    return person;
   }
 
-  const name = await Shared.promptForText(
-    "New Person",
-    "Enter the person's name."
-  );
-  if (!name) {
-    return null;
-  }
-
-  const person = {
-    id: Shared.generateUUID(),
-    name: name.trim(),
-    createdAt: new Date().toISOString()
-  };
-
-  people.push(person);
-  await savePeople(people);
-  return person;
+  return people[Number(choice)] || null;
 }
 
 async function loadPeople() {
@@ -527,17 +569,26 @@ async function showHistory() {
     return;
   }
 
-  const labels = sessions.map(
-    (session) =>
-      `${session.person.name} — ${Shared.formatDate(session.session.startedAt)} — ${session.session.turnCount} turns`
-  );
+  const choice = await Shared.presentTableMenu({
+    title: "History",
+    subtitle: `${sessions.length} conversation${sessions.length === 1 ? "" : "s"}`,
+    sections: [
+      {
+        rows: sessions.map((session, index) => ({
+          id: String(index),
+          title: session.person.name,
+          subtitle: `${Shared.formatDate(session.session.startedAt)} · ${session.session.turnCount} turns`,
+          symbol: "bubble.left.and.bubble.right",
+          disclosure: true
+        }))
+      }
+    ]
+  });
 
-  const choice = await Shared.chooseFromList("Conversation History", labels);
-  if (choice === -1) {
+  if (choice == null) {
     return;
   }
-
-  await displayConversation(sessions[choice]);
+  await displayConversation(sessions[Number(choice)]);
 }
 
 async function displayConversation(session) {

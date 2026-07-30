@@ -1,35 +1,16 @@
 // SmartTranslatePro.js
 //
-// SmartTranslate Pro — full feature entry for Scriptable.
+// SmartTranslate Pro — lean Scriptable entry.
 //
-// Includes everything in v1 plus:
-//   Library (search, favorites, tags, export)
-//   People directory + memory
-//   Statistics · Timeline · Learning Mode · Voice Profiles
-//   Post-conversation intelligence (summary, tags, memory, export)
+// Home:
+//   Translate › · Conversation · Library · People · Settings
 //
-// Requires (same Scriptable folder):
-//   SmartTranslateShared.js
-//   SmartTranslateConversation.js
-//   SmartTranslateProKit.js
+// Keep: search/favorites/export, people, light post-session summary
+// Dropped from UI: Insights (timeline/stats/learning/voices), long end wizard
 //
-// Storage: same iCloud SmartTranslate/ tree as v1, plus:
-//   SmartTranslate/exports/
+// Requires (modular) or paste scripts/dist/SmartTranslatePro.js
 //
-// Keychain:
-//   SMART_TRANSLATE_DEEPL_API_KEY
-//   SMART_TRANSLATE_ELEVENLABS_API_KEY
-//   SMART_TRANSLATE_OPENAI_API_KEY   (optional, richer summaries)
-//
-// Version: 1.0.0-pro
-//
-// IMPORTANT (Scriptable):
-// Create FOUR scripts with these EXACT names:
-//   SmartTranslateShared
-//   SmartTranslateConversation
-//   SmartTranslateProKit
-//   SmartTranslatePro
-// Or paste scripts/dist/SmartTranslatePro.js as ONE script.
+// Version: 1.1.0-lean
 
 let Shared;
 let Conversation;
@@ -45,12 +26,12 @@ try {
   alert.title = "Missing Scriptable Modules";
   alert.message =
     "Could not import required modules.\n\n" +
-    "Fix: In Scriptable, create scripts named EXACTLY:\n" +
+    "Fix: create scripts named EXACTLY:\n" +
     "• SmartTranslateShared\n" +
     "• SmartTranslateConversation\n" +
     "• SmartTranslateProKit\n" +
     "• SmartTranslatePro\n\n" +
-    "Easier option: paste scripts/dist/SmartTranslatePro.js as ONE script.";
+    "Or paste scripts/dist/SmartTranslatePro.js as ONE script.";
   alert.addAction("OK");
   await alert.presentAlert();
 }
@@ -73,14 +54,24 @@ async function main() {
     if (isFirstRun) {
       await Shared.showSuccess(
         "Setup Complete",
-        "SmartTranslate Pro is ready. Run again to open the full menu."
+        "SmartTranslate Pro is ready."
       );
       return;
     }
   }
 
-  const action = await showMainMenu(config);
+  // Stay in the home UITable until the user dismisses it.
+  while (true) {
+    const action = await showMainMenu(config);
+    if (!action || action === "cancel") {
+      break;
+    }
+    await runProAction(action, config);
+    config = (await Shared.loadConfig()) || config;
+  }
+}
 
+async function runProAction(action, config) {
   switch (action) {
     case "type":
       await runType(config);
@@ -102,18 +93,6 @@ async function main() {
     case "people":
       await Pro.runPeopleDirectory(config);
       break;
-    case "timeline":
-      await Pro.runTimeline();
-      break;
-    case "stats":
-      await Pro.runStatistics();
-      break;
-    case "learning":
-      await Pro.runLearningMode();
-      break;
-    case "voices":
-      await Pro.runVoiceProfiles(config);
-      break;
     case "settings": {
       const newConfig = await runSetupWizard(false, config);
       if (newConfig) {
@@ -127,58 +106,116 @@ async function main() {
 }
 
 // ============================================================
-// MAIN MENU
+// HOME MENU
 // ============================================================
 
 async function showMainMenu(config) {
-  const alert = new Alert();
-  alert.title = "SmartTranslate Pro";
   const engine = config.speech.engine === "apple" ? "Apple" : "ElevenLabs";
-  alert.message = `Speech: ${engine}\n${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
-  alert.addAction("Type");
-  alert.addAction("Paste");
-  alert.addAction("Dictate");
-  alert.addAction("Conversation");
-  alert.addAction("Library");
-  alert.addAction("People");
-  alert.addAction("Timeline");
-  alert.addAction("Statistics");
-  alert.addAction("Learning");
-  alert.addAction("Voice Profiles");
-  alert.addAction("Settings");
-  alert.addCancelAction("Cancel");
+  const pair = `${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
 
-  const choice = await alert.presentSheet();
-  switch (choice) {
-    case 0:
-      return "type";
-    case 1:
-      return "paste";
-    case 2:
-      return "dictate";
-    case 3:
-      return "conversation";
-    case 4:
-      return "library";
-    case 5:
-      return "people";
-    case 6:
-      return "timeline";
-    case 7:
-      return "stats";
-    case 8:
-      return "learning";
-    case 9:
-      return "voices";
-    case 10:
-      return "settings";
-    default:
+  while (true) {
+    const choice = await Shared.presentTableMenu({
+      title: "SmartTranslate Pro",
+      subtitle: `${pair} · ${engine}`,
+      sections: [
+        {
+          header: "Translate",
+          rows: [
+            {
+              id: "translate",
+              title: "Quick Translate",
+              subtitle: "Type, paste, or dictate",
+              symbol: "character.bubble",
+              disclosure: true
+            },
+            {
+              id: "conversation",
+              title: "Conversation",
+              subtitle: "Multi-turn with a person",
+              symbol: "person.2"
+            }
+          ]
+        },
+        {
+          header: "Review",
+          rows: [
+            {
+              id: "library",
+              title: "Library",
+              subtitle: "Search, favorites, export",
+              symbol: "books.vertical"
+            },
+            {
+              id: "people",
+              title: "People",
+              subtitle: "Profiles and past chats",
+              symbol: "person.crop.circle"
+            }
+          ]
+        },
+        {
+          header: "App",
+          rows: [
+            {
+              id: "settings",
+              title: "Settings",
+              subtitle: "Languages, keys, speech",
+              symbol: "gearshape"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
       return "cancel";
+    }
+
+    if (choice === "translate") {
+      const nested = await showTranslateMenu();
+      if (!nested) {
+        continue;
+      }
+      return nested;
+    }
+
+    return choice;
   }
 }
 
+async function showTranslateMenu() {
+  return await Shared.presentTableMenu({
+    title: "Quick Translate",
+    subtitle: "One shot",
+    sections: [
+      {
+        rows: [
+          {
+            id: "type",
+            title: "Type",
+            subtitle: "Enter text",
+            symbol: "keyboard"
+          },
+          {
+            id: "paste",
+            title: "Paste",
+            subtitle: "From clipboard",
+            symbol: "doc.on.clipboard"
+          },
+          {
+            id: "dictate",
+            title: "Dictate",
+            subtitle: "Speak to translate",
+            symbol: "mic"
+          }
+        ]
+      }
+    ]
+  });
+}
+
 // ============================================================
-// ONE-SHOT WORKFLOWS
+// ONE-SHOT
 // ============================================================
 
 async function runType(config) {
@@ -217,7 +254,7 @@ async function runDictate(config) {
 }
 
 // ============================================================
-// SETUP / SETTINGS
+// SETUP
 // ============================================================
 
 async function runSetupWizard(isFirstRun, existingConfig) {
@@ -227,7 +264,7 @@ async function runSetupWizard(isFirstRun, existingConfig) {
     const welcome = new Alert();
     welcome.title = "Welcome to SmartTranslate Pro";
     welcome.message =
-      "Configure languages and API keys. Pro adds library, people, stats, learning, and export on top of v1.";
+      "Lean Pro: translate, conversations, library, and people — with a cleaner Scriptable UI.";
     welcome.addAction("Start Setup");
     await welcome.present();
   }
@@ -235,17 +272,11 @@ async function runSetupWizard(isFirstRun, existingConfig) {
   const deeplKey = await Shared.configureSecret(
     "DeepL API Key",
     Shared.DEEPL_KEYCHAIN_KEY,
-    "Enter your DeepL API key (use a key ending in :fx for the free tier)."
+    "Enter your DeepL API key from https://www.deepl.com/your-account/keys\n\n(API Developer plan — Free API is no longer sold for new accounts.)"
   );
   if (!deeplKey) {
     return null;
   }
-
-  await Shared.configureSecret(
-    "OpenAI API Key (Optional)",
-    Pro.OPENAI_KEYCHAIN_KEY,
-    "Optional. Enables richer conversation summaries. Leave empty / Keep Existing to skip."
-  );
 
   config.languages.primary = await Shared.chooseLanguage(
     "Your Primary Language",
@@ -308,12 +339,6 @@ async function runSetupWizard(isFirstRun, existingConfig) {
       config.speech.apple.rate,
       0.1,
       1.0
-    );
-    config.speech.apple.pitch = await Shared.chooseSlider(
-      "Apple Speech Pitch",
-      config.speech.apple.pitch,
-      0.5,
-      2.0
     );
   } else {
     const elevenLabsKey = await Shared.configureSecret(
@@ -380,9 +405,6 @@ async function configureElevenLabsVoices(config, elevenLabsKey) {
       .slice(0, Shared.MAX_VOICE_RESULTS);
 
     if (compatibleVoices.length === 0) {
-      await Shared.showError(
-        `No compatible ElevenLabs voices were found for ${langName}. Apple speech can still be used as fallback.`
-      );
       continue;
     }
 
