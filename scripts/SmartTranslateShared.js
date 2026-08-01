@@ -267,24 +267,129 @@ async function translateWithDeepL(text, apiKey, languages) {
 }
 
 async function requestDeepLTranslation(text, targetLanguage, apiKey) {
-  const isFree = apiKey.endsWith(":fx");
-  const deeplUrl = isFree
+  const key = String(apiKey || "").trim();
+  if (!key) {
+    throw new Error("DeepL API key is empty.");
+  }
+
+  const target = String(targetLanguage || "")
+    .trim()
+    .toUpperCase();
+  if (!target) {
+    throw new Error("DeepL target language is missing.");
+  }
+
+  // Prefer the host that matches the key type, but fall back if DeepL
+  // says "Wrong endpoint" (common when Free vs paid host is mixed up).
+  const primary = key.endsWith(":fx")
     ? "https://api-free.deepl.com/v2/translate"
     : "https://api.deepl.com/v2/translate";
-  const request = new Request(deeplUrl);
+  const fallback = key.endsWith(":fx")
+    ? "https://api.deepl.com/v2/translate"
+    : "https://api-free.deepl.com/v2/translate";
+
+  try {
+    return await postDeepLTranslate(primary, text, target, key);
+  } catch (error) {
+    const message = String(error?.message || error);
+    if (/wrong endpoint|404|403|Forbidden|Not Found/i.test(message)) {
+      return await postDeepLTranslate(fallback, text, target, key);
+    }
+    throw error;
+  }
+}
+
+async function postDeepLTranslate(url, text, targetLanguage, apiKey) {
+  const request = new Request(url);
   request.method = "POST";
   request.timeoutInterval = DEEPL_TIMEOUT;
   request.headers = {
     Authorization: `DeepL-Auth-Key ${apiKey}`,
-    "Content-Type": "application/x-www-form-urlencoded"
+    "Content-Type": "application/json",
+    "User-Agent": "SmartTranslate/1.1 (Scriptable)"
   };
-  request.body = `text=${encodeURIComponent(text)}&target_lang=${encodeURIComponent(targetLanguage)}`;
+  request.body = JSON.stringify({
+    text: [text],
+    target_lang: targetLanguage
+  });
 
-  const response = await request.loadJSON();
-  if (!response?.translations?.[0]?.text) {
-    throw new Error("DeepL returned an invalid response.");
+  let response;
+  try {
+    response = await request.loadJSON();
+  } catch (error) {
+    const status = request.response?.statusCode;
+    throw new Error(
+      formatDeepLError(
+        status,
+        null,
+        `Could not parse DeepL response.${error?.message ? ` ${error.message}` : ""}`
+      )
+    );
   }
+
+  const status = request.response?.statusCode;
+  if (status && status >= 400) {
+    throw new Error(formatDeepLError(status, response));
+  }
+
+  if (!response?.translations?.[0]?.text) {
+    throw new Error(formatDeepLError(status, response, "DeepL returned no translation."));
+  }
+
   return response;
+}
+
+function formatDeepLError(statusCode, response, fallbackMessage) {
+  const apiMessage =
+    response?.message ||
+    response?.error ||
+    response?.detail ||
+    (typeof response === "string" ? response : null);
+
+  if (statusCode === 403) {
+    return (
+      "DeepL rejected the API key (403).\n\n" +
+      "Check Account → API Keys & Limits:\n" +
+      "https://www.deepl.com/your-account/keys\n\n" +
+      "Use an API plan key (not a normal Translator login).\n" +
+      (apiMessage ? `\nDeepL: ${apiMessage}` : "")
+    );
+  }
+  if (statusCode === 456) {
+    return (
+      "DeepL quota exceeded (456).\n\n" +
+      "Your character limit is used up for this billing period." +
+      (apiMessage ? `\n\nDeepL: ${apiMessage}` : "")
+    );
+  }
+  if (statusCode === 400) {
+    return (
+      "DeepL rejected the request (400).\n\n" +
+      "Often a bad target language code." +
+      (apiMessage ? `\n\nDeepL: ${apiMessage}` : "")
+    );
+  }
+  if (statusCode === 404 || /wrong endpoint/i.test(String(apiMessage || ""))) {
+    return (
+      "DeepL wrong endpoint (404).\n\n" +
+      "Free keys (:fx) use api-free.deepl.com.\n" +
+      "Paid/Developer keys use api.deepl.com." +
+      (apiMessage ? `\n\nDeepL: ${apiMessage}` : "")
+    );
+  }
+
+  const parts = [];
+  if (statusCode) {
+    parts.push(`HTTP ${statusCode}`);
+  }
+  if (apiMessage) {
+    parts.push(String(apiMessage));
+  } else if (fallbackMessage) {
+    parts.push(fallbackMessage);
+  } else {
+    parts.push("DeepL returned an invalid response.");
+  }
+  return parts.join(" — ");
 }
 
 function getAlternateTarget(languages) {
