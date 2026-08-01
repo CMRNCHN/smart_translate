@@ -193,10 +193,10 @@ async function runSetupWizard(isFirstRun, existingConfig) {
     await welcome.present();
   }
 
-  const deeplKey = await Shared.configureSecret(
+  const deeplKey = await Shared.ensureSecret(
     "DeepL API Key",
     Shared.DEEPL_KEYCHAIN_KEY,
-    "Enter your DeepL API key (use a key ending in :fx for the free tier)."
+    "Paste your DeepL API key once. It stays in Scriptable Keychain and is reused automatically.\n\nhttps://www.deepl.com/your-account/keys"
   );
   if (!deeplKey) {
     return null;

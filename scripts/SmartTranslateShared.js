@@ -182,7 +182,7 @@ async function saveConfig(config) {
 function getRequiredKey(keychainKey, serviceName) {
   if (!Keychain.contains(keychainKey)) {
     throw new Error(
-      `${serviceName} API key is missing.\n\nExpected Keychain entry:\n${keychainKey}`
+      `${serviceName} API key is missing.\n\nOpen Settings → API Keys to save it once.\nKeychain entry:\n${keychainKey}`
     );
   }
   const key = Keychain.get(keychainKey);
@@ -192,19 +192,68 @@ function getRequiredKey(keychainKey, serviceName) {
   return key.trim();
 }
 
-async function configureSecret(title, keychainKey, message) {
-  const existing = Keychain.contains(keychainKey) ? Keychain.get(keychainKey) : "";
+function hasSecret(keychainKey) {
+  if (!Keychain.contains(keychainKey)) {
+    return false;
+  }
+  const key = Keychain.get(keychainKey);
+  return !!(key && key.trim());
+}
+
+function getOptionalKey(keychainKey) {
+  if (!hasSecret(keychainKey)) {
+    return null;
+  }
+  return Keychain.get(keychainKey).trim();
+}
+
+function maskSecret(value) {
+  const key = String(value || "").trim();
+  if (!key) {
+    return "(none)";
+  }
+  if (key.length <= 8) {
+    return "••••";
+  }
+  return `••••${key.slice(-4)}`;
+}
+
+/**
+ * Ensure a Keychain secret exists.
+ * - If already saved: return it without prompting (unless forcePrompt).
+ * - If missing: prompt once, save to Keychain, return it.
+ */
+async function ensureSecret(title, keychainKey, message, options = {}) {
+  const forcePrompt = !!options.forcePrompt;
+  const existing = getOptionalKey(keychainKey);
+
+  if (existing && !forcePrompt) {
+    return existing;
+  }
+
+  return await configureSecret(title, keychainKey, message, {
+    allowKeepExisting: !!existing
+  });
+}
+
+async function configureSecret(title, keychainKey, message, options = {}) {
+  const existing = getOptionalKey(keychainKey) || "";
+  const allowKeepExisting =
+    options.allowKeepExisting !== undefined
+      ? options.allowKeepExisting
+      : !!existing;
+
   const alert = new Alert();
   alert.title = title;
   alert.message = existing
-    ? `${message}\n\nA key is already configured. Enter a new key to replace it.`
+    ? `${message}\n\nSaved key: ${maskSecret(existing)}\nLeave the field blank and tap Keep Existing to reuse it.`
     : message;
   alert.addSecureTextField(
-    existing ? "Enter new API key..." : "Paste API key here...",
+    existing ? "Paste new key to replace…" : "Paste API key here…",
     ""
   );
   alert.addAction(existing ? "Replace Key" : "Save Key");
-  if (existing) {
+  if (existing && allowKeepExisting) {
     alert.addAction("Keep Existing");
   }
   alert.addCancelAction("Cancel");
@@ -213,15 +262,15 @@ async function configureSecret(title, keychainKey, message) {
   if (choice === -1) {
     return null;
   }
-  if (existing && choice === 1) {
+  if (existing && allowKeepExisting && choice === 1) {
     return existing;
-  }
-  if (existing && choice === 2) {
-    return null;
   }
 
   const newKey = alert.textFieldValue(0).trim();
   if (!newKey) {
+    if (existing && allowKeepExisting) {
+      return existing;
+    }
     await showError(`${title} cannot be empty.`);
     return null;
   }
@@ -804,6 +853,10 @@ module.exports = {
   loadConfig,
   saveConfig,
   getRequiredKey,
+  hasSecret,
+  getOptionalKey,
+  maskSecret,
+  ensureSecret,
   configureSecret,
   translateWithDeepL,
   speakTranslation,
