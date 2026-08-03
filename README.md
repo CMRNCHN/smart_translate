@@ -2,7 +2,15 @@
 
 Scriptable app for bidirectional translation with optional conversation transcripts.
 
-## Install (easiest — one script)
+## Install (easiest — installer script)
+
+1. On your iPhone, open the installer raw link (see [`scripts/dist/LINKS.md`](scripts/dist/LINKS.md)) or paste [`scripts/dist/SmartTranslateInstaller.js`](scripts/dist/SmartTranslateInstaller.js).
+2. In **Scriptable**, create one new script named `SmartTranslate Installer` and paste the installer code.
+3. Run it and choose **Run SmartTranslate (v1)** or **Run SmartTranslate Pro**.
+
+The installer downloads the latest bundle from GitHub, caches it in iCloud (`SmartTranslate/installer/`), and runs it — no copy/paste of the large files.
+
+## Install (manual — one script)
 
 1. Open **Scriptable**.
 2. Create one new script (any name, e.g. `SmartTranslate`).
