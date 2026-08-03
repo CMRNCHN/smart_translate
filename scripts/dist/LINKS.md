@@ -4,13 +4,23 @@ Branch: **cursor/scriptable-only-bundler**
 
 ## Easiest: Installer (recommended)
 
-Paste **one small installer script** into Scriptable. It downloads and runs SmartTranslate for you — no manual copy/paste of the large bundle files.
+Paste **one small installer** into Scriptable and run it **once**. It will:
 
-- **Installer (raw):** https://raw.githubusercontent.com/CMRNCHN/smart_translate/cursor/scriptable-only-bundler/scripts/dist/SmartTranslateInstaller.js
-- **Installer (GitHub page):** https://github.com/CMRNCHN/smart_translate/blob/cursor/scriptable-only-bundler/scripts/dist/SmartTranslateInstaller.js
+1. Download the app from GitHub
+2. Save it as a real Scriptable script (`SmartTranslate` or `SmartTranslatePro`)
+3. **Delete this installer** from your script list
+4. Open the installed app
 
-1. Open the installer link on your iPhone → copy all → Scriptable → new script → paste → run.
-2. Choose **Run SmartTranslate (v1)** or **Run SmartTranslate Pro**.
+### SmartTranslate installer
+
+- **Raw:** https://raw.githubusercontent.com/CMRNCHN/smart_translate/cursor/smarttranslate-installer-89ff/scripts/dist/install-smarttranslate.js
+- **GitHub:** https://github.com/CMRNCHN/smart_translate/blob/cursor/smarttranslate-installer-89ff/scripts/dist/install-smarttranslate.js
+
+### Generic installer (for your own scripts)
+
+Use [`ScriptInstall.js`](ScriptInstall.js) — edit `INSTALLER.items` with any `scriptName` + `url`, then paste and run once.
+
+- **Raw:** https://raw.githubusercontent.com/CMRNCHN/smart_translate/cursor/smarttranslate-installer-89ff/scripts/dist/ScriptInstall.js
 
 ## Manual install (paste full bundle)
 
@@ -30,4 +40,5 @@ Paste either raw file into **one** Scriptable script (any name).
 
 ```bash
 node tools/bundle.mjs
+node tools/build-installer.mjs
 ```

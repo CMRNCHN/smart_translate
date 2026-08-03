@@ -15,6 +15,10 @@ SmartTranslate is a [Scriptable](https://scriptable.app/) app (JavaScript that r
 - Edit the modular sources in `scripts/*.js`, then regenerate the paste-ready single-file bundles with `node tools/bundle.mjs`.
 - The bundler is **deterministic**, and `scripts/dist/SmartTranslate.js` / `scripts/dist/SmartTranslatePro.js` are checked into git. After running the bundler with unchanged sources, `git diff` should be empty. Always commit regenerated bundles alongside source edits so `dist/` stays in sync.
 
+### Installers (`ScriptInstall`)
+- `scripts/ScriptInstall.runtime.js` is the shared installer runtime; `tools/build-installer.mjs` generates `scripts/dist/ScriptInstall.js` (generic) and `scripts/dist/install-*.js` from `scripts/installers/*.json`.
+- After changing installer configs or runtime, run `node tools/build-installer.mjs` and commit the generated `scripts/dist/` and `scripts/installers/*.install.js` files.
+
 ### Syntax checking / lint / test
 - There is **no ESLint/Prettier config and no automated test suite**.
 - To syntax-check a script, treat it as an ES module because the sources/bundles use top-level `await`: `node --check --input-type=module < scripts/dist/SmartTranslate.js`. Plain `node --check <file>.js` parses as CommonJS and will falsely fail on the top-level `await`.
