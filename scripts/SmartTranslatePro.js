@@ -329,7 +329,7 @@ async function runSettingsMenu(config) {
               title: "API Keys",
               subtitle: deeplSaved
                 ? `DeepL ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}${elevenSaved ? " · ElevenLabs saved" : ""}`
-                : "Add DeepL key (one time)",
+                : "Set up DeepL and ElevenLabs",
               symbol: "key"
             },
             {
@@ -364,46 +364,7 @@ async function runSettingsMenu(config) {
 }
 
 async function manageApiKeys() {
-  let forceDeepLPrompt = false;
-  if (Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY)) {
-    const shouldReplace = await Shared.confirm(
-      "DeepL Key",
-      `Already saved: ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}\n\nReplace it?`
-    );
-    if (!shouldReplace) {
-      await Shared.showSuccess(
-        "DeepL Key",
-        "Keeping the saved Keychain key. You will not be asked during translate."
-      );
-    } else {
-      forceDeepLPrompt = true;
-    }
-  }
-
-  if (forceDeepLPrompt || !Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY)) {
-    const deepl = await Shared.ensureSecret(
-      "DeepL API Key",
-      Shared.DEEPL_KEYCHAIN_KEY,
-      "Paste your DeepL API key once. It is stored in Scriptable Keychain and reused automatically.\n\nhttps://www.deepl.com/your-account/keys",
-      { forcePrompt: forceDeepLPrompt }
-    );
-    if (!deepl) {
-      return;
-    }
-    await Shared.showSuccess(
-      "DeepL Key Saved",
-      `Stored as ${Shared.maskSecret(deepl)}.\n\nYou will not be asked again unless you change it here.`
-    );
-  }
-
-  if (await Shared.confirm("ElevenLabs?", "Update ElevenLabs API key too?")) {
-    await Shared.ensureSecret(
-      "ElevenLabs API Key",
-      Shared.ELEVENLABS_KEYCHAIN_KEY,
-      "Optional. Paste your ElevenLabs key to store it in Keychain.",
-      { forcePrompt: true }
-    );
-  }
+  await Shared.runApiKeyWizard({ mode: "hub" });
 }
 
 // ============================================================
@@ -424,12 +385,12 @@ async function runSetupWizard(isFirstRun, existingConfig, options = {}) {
   }
 
   if (promptForKeys || !Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY)) {
-    const deeplKey = await Shared.ensureSecret(
-      "DeepL API Key",
-      Shared.DEEPL_KEYCHAIN_KEY,
-      "Paste your DeepL API key once. It stays in Scriptable Keychain.\n\nhttps://www.deepl.com/your-account/keys"
-    );
-    if (!deeplKey) {
+    const keysOk = await Shared.runApiKeyWizard({
+      mode: "deepl",
+      required: true,
+      isFirstRun: !!isFirstRun
+    });
+    if (!keysOk) {
       return null;
     }
   }
@@ -497,11 +458,10 @@ async function runSetupWizard(isFirstRun, existingConfig, options = {}) {
       1.0
     );
   } else {
-    const elevenLabsKey = await Shared.ensureSecret(
-      "ElevenLabs API Key",
-      Shared.ELEVENLABS_KEYCHAIN_KEY,
-      "Paste your ElevenLabs API key once. Stored in Keychain."
-    );
+    const elevenLabsKey = await Shared.runApiKeyWizard({
+      mode: "elevenlabs",
+      required: false
+    });
     config.speech.elevenlabs.enabled = !!elevenLabsKey;
 
     if (config.speech.elevenlabs.enabled) {

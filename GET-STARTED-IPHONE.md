@@ -85,6 +85,8 @@ The installer will:
 
 SmartTranslate needs a DeepL key to translate. You only enter it once; it stays in your iPhone Keychain.
 
+**In the app:** open **Settings → API Keys** for the setup wizard. You can view masked keys, copy them back to the clipboard, replace them, test them, or open the DeepL / ElevenLabs sign-up pages.
+
 **If a friend sent you a key in a private message:** paste that when the app asks.
 
 **Otherwise:**

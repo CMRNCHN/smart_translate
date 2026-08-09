@@ -2,7 +2,7 @@
 //
 // WebView UI kit — mockup-style screens for all SmartTranslate menus.
 //
-// Version: 2.0.0
+// Version: 2.1.0
 
 const LANGUAGE_FLAGS = {
   AR: "🇸🇦",
@@ -235,6 +235,24 @@ const UI_STYLES = `
     color: var(--text); border-radius: 12px; padding: 12px 14px; font-size: 16px; outline: none;
   }
   .prompt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .key-card {
+    border: 1px solid var(--card-border); background: var(--card); border-radius: var(--radius-md);
+    padding: 14px; margin-bottom: 10px; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  }
+  .key-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .key-card-title { font-size: 17px; font-weight: 700; }
+  .status-pill {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 4px 9px; border-radius: 999px; border: 1px solid var(--card-border);
+  }
+  .status-pill.ok { color: #6ee7b7; background: rgba(52, 211, 153, 0.12); border-color: rgba(52, 211, 153, 0.28); }
+  .status-pill.missing { color: #fdba74; background: rgba(251, 146, 60, 0.12); border-color: rgba(251, 146, 60, 0.28); }
+  .key-card-sub { font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin: 0 0 10px; }
+  .key-meta {
+    font-size: 12px; color: var(--text-tertiary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    word-break: break-all; margin-bottom: 12px;
+  }
+  .key-actions { display: flex; flex-direction: column; gap: 8px; }
 `;
 
 function wrapDocument(pageTitle, bodyHtml) {
@@ -325,12 +343,13 @@ function buildMessageHTML({ title, message, variant, actions }) {
   return wrapDocument(title, body);
 }
 
-function buildPromptHTML({ title, message, defaultValue, placeholder }) {
+function buildPromptHTML({ title, message, defaultValue, placeholder, secure }) {
+  const inputType = secure ? "password" : "text";
   const body = `<div class="app">
     ${renderTopbar("SmartTranslate", null)}
     ${renderPageHeader(title, message)}
     <div class="prompt-card list-row" style="flex-direction:column;align-items:stretch;">
-      <input class="prompt-input" id="st-input" type="text" value="${escapeHtml(defaultValue || "")}" placeholder="${escapeHtml(placeholder || "Enter text…")}" />
+      <input class="prompt-input" id="st-input" type="${inputType}" autocomplete="off" autocapitalize="off" spellcheck="false" value="${escapeHtml(defaultValue || "")}" placeholder="${escapeHtml(placeholder || "Enter text…")}" />
       <div class="prompt-actions">
         <button type="button" class="btn-row" data-action="cancel">Cancel</button>
         <button type="button" class="btn-row primary" data-action="submit">Continue</button>
@@ -339,6 +358,102 @@ function buildPromptHTML({ title, message, defaultValue, placeholder }) {
   </div>`;
 
   return wrapDocument(title, body);
+}
+
+function buildApiKeyWizardHTML(status) {
+  const s = status || {};
+  const deepl = s.deepl || {};
+  const eleven = s.elevenlabs || {};
+
+  const deeplPill = deepl.saved
+    ? `<span class="status-pill ok">Saved</span>`
+    : `<span class="status-pill missing">Not set</span>`;
+  const elevenPill = eleven.saved
+    ? `<span class="status-pill ok">Saved</span>`
+    : `<span class="status-pill missing">Optional</span>`;
+
+  const body = `<div class="app">
+    ${renderTopbar("SmartTranslate", "Keys")}
+    ${renderPageHeader("API Keys", "Stored in Scriptable Keychain on your iPhone.")}
+    <section class="section">
+      <div class="key-card">
+        <div class="key-card-head">
+          <div class="key-card-title">DeepL</div>
+          ${deeplPill}
+        </div>
+        <p class="key-card-sub">Required for translation.${deepl.saved ? ` Showing ${escapeHtml(deepl.masked || "")}.` : " Get a free key at deepl.com."}</p>
+        <div class="key-actions">
+          <button type="button" class="btn-row primary" data-action="deepl_manage">${deepl.saved ? "View / Update DeepL Key" : "Set Up DeepL Key"}</button>
+          <button type="button" class="btn-row" data-action="deepl_signup">Get DeepL API Key</button>
+        </div>
+      </div>
+      <div class="key-card">
+        <div class="key-card-head">
+          <div class="key-card-title">ElevenLabs</div>
+          ${elevenPill}
+        </div>
+        <p class="key-card-sub">Optional premium voices.${eleven.saved ? ` Showing ${escapeHtml(eleven.masked || "")}.` : " Skip if you use Apple voice."}</p>
+        <div class="key-actions">
+          <button type="button" class="btn-row primary" data-action="eleven_manage">${eleven.saved ? "View / Update ElevenLabs Key" : "Set Up ElevenLabs Key"}</button>
+          <button type="button" class="btn-row" data-action="eleven_signup">Get ElevenLabs API Key</button>
+        </div>
+      </div>
+      <button type="button" class="btn-row" data-action="done">Done</button>
+    </section>
+  </div>`;
+
+  return wrapDocument("API Keys", body);
+}
+
+function buildApiKeyDetailHTML(service) {
+  const s = service || {};
+  const saved = !!s.saved;
+  const body = `<div class="app">
+    ${renderTopbar("SmartTranslate", "Keys")}
+    ${renderPageHeader(s.label || "API Key", saved ? "Saved on this iPhone" : "Not saved yet")}
+    <section class="section">
+      <div class="key-card">
+        <div class="key-card-head">
+          <div class="key-card-title">${escapeHtml(s.label || "API Key")}</div>
+          <span class="status-pill ${saved ? "ok" : "missing"}">${saved ? "Saved" : "Not set"}</span>
+        </div>
+        <p class="key-card-sub">${escapeHtml(s.hint || "")}</p>
+        ${saved ? `<div class="key-meta">Masked: ${escapeHtml(s.masked || "")}<br>Keychain: ${escapeHtml(s.keychainKey || "")}</div>` : ""}
+        <div class="key-actions">
+          ${saved ? `<button type="button" class="btn-row primary" data-action="copy">Copy Full Key</button>` : ""}
+          <button type="button" class="btn-row ${saved ? "" : "primary"}" data-action="paste">${saved ? "Replace Key" : "Paste API Key"}</button>
+          ${saved ? `<button type="button" class="btn-row" data-action="test">Test Key</button>` : ""}
+          <button type="button" class="btn-row" data-action="signup">Open ${escapeHtml(s.label || "Provider")} Keys Page</button>
+          ${saved ? `<button type="button" class="btn-row destructive" data-action="remove">Remove Key</button>` : ""}
+          <button type="button" class="btn-row" data-action="back">Back</button>
+        </div>
+      </div>
+    </section>
+  </div>`;
+
+  return wrapDocument(s.label || "API Key", body);
+}
+
+async function bindPromptHandlers(webView, includeEmptySubmit) {
+  return webView.evaluateJavaScript(
+    `(function () {
+      document.querySelector('[data-action="submit"]').addEventListener("click", function () {
+        completion(JSON.stringify({
+          a: "submit",
+          v: document.getElementById("st-input").value
+        }));
+      });
+      document.querySelector('[data-action="cancel"]').addEventListener("click", function () {
+        completion(JSON.stringify({ a: "cancel" }));
+      });
+      ${includeEmptySubmit ? "" : `document.getElementById("st-input").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          document.querySelector('[data-action="submit"]').click();
+        }
+      });`}
+    })();`,
+    true
+  );
 }
 
 function buildProHomeHTML(context) {
@@ -559,12 +674,14 @@ async function presentBoolean(title, message, currentValue) {
   return choice === "yes";
 }
 
-async function presentPrompt(title, message, defaultText) {
+async function presentPrompt(title, message, defaultText, options) {
+  const opts = options || {};
   const html = buildPromptHTML({
     title,
     message,
     defaultValue: defaultText || "",
-    placeholder: "Enter text…"
+    placeholder: opts.placeholder || "Enter text…",
+    secure: !!opts.secure
   });
 
   if (typeof WebView === "undefined") {
@@ -583,20 +700,7 @@ async function presentPrompt(title, message, defaultText) {
   }
 
   const raw = await Promise.race([
-    sessionWebView.evaluateJavaScript(
-      `(function () {
-        document.querySelector('[data-action="submit"]').addEventListener("click", function () {
-          completion(JSON.stringify({
-            a: "submit",
-            v: document.getElementById("st-input").value
-          }));
-        });
-        document.querySelector('[data-action="cancel"]').addEventListener("click", function () {
-          completion(JSON.stringify({ a: "cancel" }));
-        });
-      })();`,
-      true
-    ),
+    bindPromptHandlers(sessionWebView, true),
     sessionPresentPromise
   ]);
 
@@ -605,6 +709,25 @@ async function presentPrompt(title, message, defaultText) {
     return null;
   }
   return String(parsed.v || "").trim();
+}
+
+async function presentSecurePrompt(title, message, placeholder) {
+  return presentPrompt(title, message, "", {
+    secure: true,
+    placeholder: placeholder || "Paste API key here…"
+  });
+}
+
+async function presentApiKeyWizardHub(status) {
+  const raw = await presentScreen(buildApiKeyWizardHTML(status));
+  const parsed = parseCompletion(raw);
+  return parsed ? parsed.a : null;
+}
+
+async function presentApiKeyDetail(service) {
+  const raw = await presentScreen(buildApiKeyDetailHTML(service));
+  const parsed = parseCompletion(raw);
+  return parsed ? parsed.a : null;
 }
 
 async function presentProHome(context) {
@@ -637,6 +760,9 @@ module.exports = {
   presentPicker,
   presentBoolean,
   presentPrompt,
+  presentSecurePrompt,
+  presentApiKeyWizardHub,
+  presentApiKeyDetail,
   presentProHome,
   presentV1Home,
   resetSession
