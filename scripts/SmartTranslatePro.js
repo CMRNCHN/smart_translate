@@ -15,11 +15,13 @@
 let Shared;
 let Conversation;
 let Pro;
+let UI;
 let modulesLoaded = false;
 try {
   Shared = importModule("SmartTranslateShared");
   Conversation = importModule("SmartTranslateConversation");
   Pro = importModule("SmartTranslateProKit");
+  UI = importModule("SmartTranslateUI");
   modulesLoaded = true;
 } catch (error) {
   const alert = new Alert();
@@ -30,6 +32,7 @@ try {
     "• SmartTranslateShared\n" +
     "• SmartTranslateConversation\n" +
     "• SmartTranslateProKit\n" +
+    "• SmartTranslateUI\n" +
     "• SmartTranslatePro\n\n" +
     "Or paste scripts/dist/SmartTranslatePro.js as ONE script.";
   alert.addAction("OK");
@@ -105,7 +108,61 @@ async function runProAction(action, config) {
 // HOME MENU
 // ============================================================
 
+async function buildHomeContext(config) {
+  const sessions = await Conversation.loadAllSessions();
+  const active = await Shared.loadJSON(Shared.ACTIVE_SESSION_FILE);
+  const peopleData = await Shared.loadJSON(Shared.PEOPLE_FILE);
+  const people = Array.isArray(peopleData) ? peopleData : [];
+
+  let favoriteCount = 0;
+  for (const session of sessions) {
+    if (session.intelligence && session.intelligence.favorite) {
+      favoriteCount += 1;
+    }
+  }
+
+  const libraryMeta =
+    sessions.length === 0
+      ? "No saved chats yet"
+      : `${sessions.length} chat${sessions.length === 1 ? "" : "s"}${favoriteCount ? ` · ${favoriteCount} ★` : ""}`;
+
+  const peopleMeta =
+    people.length === 0
+      ? "Add people as you chat"
+      : `${people.length} profile${people.length === 1 ? "" : "s"}`;
+
+  return {
+    primaryLang: Shared.getLanguageDisplayName(config.languages.primary),
+    conversationLang: Shared.getLanguageDisplayName(config.languages.conversation),
+    primaryFlag: UI.flagForCode(config.languages.primary),
+    conversationFlag: UI.flagForCode(config.languages.conversation),
+    engine: config.speech.engine === "apple" ? "Apple Voice" : "ElevenLabs",
+    activeSession: active?.person?.name
+      ? {
+          name: active.person.name,
+          turns: active.session?.turnCount || 0
+        }
+      : null,
+    libraryMeta,
+    peopleMeta
+  };
+}
+
 async function showMainMenu(config) {
+  const context = await buildHomeContext(config);
+
+  if (UI && typeof UI.presentProHome === "function") {
+    const action = await UI.presentProHome(context);
+    if (!action) {
+      return "cancel";
+    }
+    return action;
+  }
+
+  return await showMainMenuFallback(config);
+}
+
+async function showMainMenuFallback(config) {
   const engine = config.speech.engine === "apple" ? "Apple" : "ElevenLabs";
   const pair = `${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
 
