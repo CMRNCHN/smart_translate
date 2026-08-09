@@ -2,6 +2,8 @@
 
 Scriptable app for bidirectional translation with optional conversation transcripts.
 
+**New user on iPhone only?** See **[GET-STARTED-IPHONE.md](GET-STARTED-IPHONE.md)** — Scriptable install, no computer or Cursor required.
+
 ## Install (easiest — installer script)
 
 1. On your iPhone, open the installer raw link in [`scripts/dist/LINKS.md`](scripts/dist/LINKS.md) (`install-smarttranslate.js`).
