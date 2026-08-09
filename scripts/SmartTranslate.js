@@ -101,10 +101,9 @@ async function main() {
         await Conversation.runConversation(config);
         break;
       case "settings": {
-        const newConfig = await runSetupWizard(false, config);
-        if (newConfig) {
-          await Shared.saveConfig(newConfig);
-          config = newConfig;
+        const updated = await runSettingsMenu(config);
+        if (updated) {
+          config = updated;
         }
         break;
       }
@@ -201,7 +200,65 @@ async function runDictate(config) {
 // SETUP / SETTINGS
 // ============================================================
 
-async function runSetupWizard(isFirstRun, existingConfig) {
+async function runSettingsMenu(config) {
+  while (true) {
+    const deeplSaved = Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY);
+    const elevenSaved = Shared.hasSecret(Shared.ELEVENLABS_KEYCHAIN_KEY);
+    const choice = await Shared.presentTableMenu({
+      title: "Settings",
+      subtitle: deeplSaved
+        ? `DeepL saved ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}`
+        : "DeepL key missing",
+      sections: [
+        {
+          rows: [
+            {
+              id: "preferences",
+              title: "Languages & Speech",
+              subtitle: "Targets, dictation, voice engine",
+              symbol: "globe"
+            },
+            {
+              id: "keys",
+              title: "API Keys",
+              subtitle: deeplSaved
+                ? `DeepL ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}${elevenSaved ? " · ElevenLabs saved" : ""}`
+                : "Set up DeepL and ElevenLabs",
+              symbol: "key"
+            },
+            {
+              id: "test",
+              title: "Test Translation",
+              subtitle: "Verify DeepL + speech",
+              symbol: "checkmark.seal"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
+      return config;
+    }
+
+    if (choice === "preferences") {
+      const newConfig = await runSetupWizard(false, config, {
+        promptForKeys: false
+      });
+      if (newConfig) {
+        await Shared.saveConfig(newConfig);
+        config = newConfig;
+      }
+    } else if (choice === "keys") {
+      await Shared.runApiKeyWizard({ mode: "hub" });
+    } else if (choice === "test") {
+      await testConfiguration(config);
+    }
+  }
+}
+
+async function runSetupWizard(isFirstRun, existingConfig, options = {}) {
+  const promptForKeys = options.promptForKeys !== false;
   let config = Shared.deepMerge(Shared.DEFAULT_CONFIG, existingConfig || {});
 
   if (isFirstRun) {
@@ -213,13 +270,15 @@ async function runSetupWizard(isFirstRun, existingConfig) {
     await welcome.present();
   }
 
-  const deeplKey = await Shared.ensureSecret(
-    "DeepL API Key",
-    Shared.DEEPL_KEYCHAIN_KEY,
-    "Paste your DeepL API key once. It stays in Scriptable Keychain and is reused automatically.\n\nhttps://www.deepl.com/your-account/keys"
-  );
-  if (!deeplKey) {
-    return null;
+  if (promptForKeys) {
+    const keysOk = await Shared.runApiKeyWizard({
+      mode: "deepl",
+      required: true,
+      isFirstRun: !!isFirstRun
+    });
+    if (!keysOk) {
+      return null;
+    }
   }
 
   config.languages.primary = await Shared.chooseLanguage(
@@ -291,11 +350,10 @@ async function runSetupWizard(isFirstRun, existingConfig) {
       2.0
     );
   } else {
-    const elevenLabsKey = await Shared.configureSecret(
-      "ElevenLabs API Key",
-      Shared.ELEVENLABS_KEYCHAIN_KEY,
-      "Enter your ElevenLabs API key."
-    );
+    const elevenLabsKey = await Shared.runApiKeyWizard({
+      mode: "elevenlabs",
+      required: false
+    });
     config.speech.elevenlabs.enabled = !!elevenLabsKey;
 
     if (config.speech.elevenlabs.enabled) {
