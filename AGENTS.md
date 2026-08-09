@@ -19,6 +19,11 @@ SmartTranslate is a [Scriptable](https://scriptable.app/) app (JavaScript that r
 - `scripts/ScriptInstall.runtime.js` is the shared installer runtime; `tools/build-installer.mjs` generates `scripts/dist/ScriptInstall.js` (generic) and `scripts/dist/install-*.js` from `scripts/installers/*.json`.
 - After changing installer configs or runtime, run `node tools/build-installer.mjs` and commit the generated `scripts/dist/` and `scripts/installers/*.install.js` files.
 
+### WebView UI (`SmartTranslateUI`)
+- `scripts/SmartTranslateUI.js` provides mockup-style WebView screens. `SmartTranslateShared.js` delegates `presentTableMenu`, `confirm`, `chooseFromList`, `chooseBoolean`, `promptForText`, `showError`, and `showSuccess` to the UI module when available.
+- Included in both Pro and v1 standalone bundles via `tools/bundle.mjs`. Modular installs need a `SmartTranslateUI` script in Scriptable.
+- After UI changes, run `node tools/bundle.mjs` and commit `scripts/dist/`.
+
 ### Syntax checking / lint / test
 - There is **no ESLint/Prettier config and no automated test suite**.
 - To syntax-check a script, treat it as an ES module because the sources/bundles use top-level `await`: `node --check --input-type=module < scripts/dist/SmartTranslate.js`. Plain `node --check <file>.js` parses as CommonJS and will falsely fail on the top-level `await`.

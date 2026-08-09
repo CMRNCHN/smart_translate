@@ -34,10 +34,12 @@
 
 let Shared;
 let Conversation;
+let UI;
 let modulesLoaded = false;
 try {
   Shared = importModule("SmartTranslateShared");
   Conversation = importModule("SmartTranslateConversation");
+  UI = importModule("SmartTranslateUI");
   modulesLoaded = true;
 } catch (error) {
   const alert = new Alert();
@@ -47,6 +49,7 @@ try {
     "Fix: In Scriptable, create separate scripts named EXACTLY:\n" +
     "• SmartTranslateShared\n" +
     "• SmartTranslateConversation\n" +
+    "• SmartTranslateUI\n" +
     "• SmartTranslate\n\n" +
     "Paste each matching file from the repo scripts/ folder.\n\n" +
     "Easier option: paste scripts/dist/SmartTranslate.js as ONE script.";
@@ -78,30 +81,36 @@ async function main() {
     }
   }
 
-  const action = await showMainMenu(config);
-
-  switch (action) {
-    case "type":
-      await runType(config);
-      break;
-    case "paste":
-      await runPaste(config);
-      break;
-    case "dictate":
-      await runDictate(config);
-      break;
-    case "conversation":
-      await Conversation.runConversation(config);
-      break;
-    case "settings": {
-      const newConfig = await runSetupWizard(false, config);
-      if (newConfig) {
-        await Shared.saveConfig(newConfig);
-      }
+  while (true) {
+    const action = await showMainMenu(config);
+    if (!action || action === "cancel") {
       break;
     }
-    default:
-      break;
+
+    switch (action) {
+      case "type":
+        await runType(config);
+        break;
+      case "paste":
+        await runPaste(config);
+        break;
+      case "dictate":
+        await runDictate(config);
+        break;
+      case "conversation":
+        await Conversation.runConversation(config);
+        break;
+      case "settings": {
+        const newConfig = await runSetupWizard(false, config);
+        if (newConfig) {
+          await Shared.saveConfig(newConfig);
+          config = newConfig;
+        }
+        break;
+      }
+      default:
+        break;
+    }
   }
 }
 
@@ -110,32 +119,43 @@ async function main() {
 // ============================================================
 
 async function showMainMenu(config) {
-  const alert = new Alert();
-  alert.title = "SmartTranslate";
-  const engine = config.speech.engine === "apple" ? "Apple" : "ElevenLabs";
-  alert.message = `Speech: ${engine}\n${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
-  alert.addAction("Type");
-  alert.addAction("Paste");
-  alert.addAction("Dictate");
-  alert.addAction("Conversation");
-  alert.addAction("Settings");
-  alert.addCancelAction("Cancel");
+  const engine = config.speech.engine === "apple" ? "Apple Voice" : "ElevenLabs";
+  const context = {
+    primaryLang: Shared.getLanguageDisplayName(config.languages.primary),
+    conversationLang: Shared.getLanguageDisplayName(config.languages.conversation),
+    primaryFlag: UI.flagForCode(config.languages.primary),
+    conversationFlag: UI.flagForCode(config.languages.conversation),
+    engine
+  };
 
-  const choice = await alert.presentAlert();
-  switch (choice) {
-    case 0:
-      return "type";
-    case 1:
-      return "paste";
-    case 2:
-      return "dictate";
-    case 3:
-      return "conversation";
-    case 4:
-      return "settings";
-    default:
-      return "cancel";
+  if (UI?.presentV1Home) {
+    const action = await UI.presentV1Home(context);
+    return action || "cancel";
   }
+
+  const choice = await Shared.presentTableMenu({
+    title: "SmartTranslate",
+    subtitle: `${context.primaryLang} ↔ ${context.conversationLang} · ${engine}`,
+    sections: [
+      {
+        header: "Translate",
+        rows: [
+          { id: "type", title: "Type", subtitle: "Enter text", symbol: "keyboard" },
+          { id: "paste", title: "Paste", subtitle: "From clipboard", symbol: "doc.on.clipboard" },
+          { id: "dictate", title: "Dictate", subtitle: "Speak to translate", symbol: "mic" }
+        ]
+      },
+      {
+        header: "More",
+        rows: [
+          { id: "conversation", title: "Conversation", subtitle: "Multi-turn sessions", symbol: "person.2" },
+          { id: "settings", title: "Settings", subtitle: "Languages and keys", symbol: "gearshape" }
+        ]
+      }
+    ]
+  });
+
+  return choice || "cancel";
 }
 
 // ============================================================

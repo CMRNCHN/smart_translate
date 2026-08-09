@@ -586,7 +586,33 @@ async function dictateText(config) {
 // UI HELPERS
 // ============================================================
 
+function getUIModule() {
+  try {
+    if (typeof UI !== "undefined" && UI) {
+      return UI;
+    }
+  } catch (error) {
+    // Ignore — UI may not exist in modular installs.
+  }
+  try {
+    return importModule("SmartTranslateUI");
+  } catch (error) {
+    return null;
+  }
+}
+
 async function showError(message) {
+  const ui = getUIModule();
+  if (ui?.presentMessage) {
+    try {
+      await ui.presentMessage("SmartTranslate Error", message, {
+        variant: "error"
+      });
+      return;
+    } catch (error) {
+      console.error(`WebView error UI failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = "SmartTranslate Error";
   alert.message = message;
@@ -595,6 +621,15 @@ async function showError(message) {
 }
 
 async function showSuccess(title, message) {
+  const ui = getUIModule();
+  if (ui?.presentMessage) {
+    try {
+      await ui.presentMessage(title, message, { variant: "success" });
+      return;
+    } catch (error) {
+      console.error(`WebView success UI failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   alert.message = message;
@@ -614,7 +649,19 @@ async function showSuccess(title, message) {
  *
  * Returns the selected row id, or null if dismissed.
  */
-async function presentTableMenu({ title, subtitle, sections }) {
+async function presentTableMenu(options) {
+  const ui = getUIModule();
+  if (ui?.presentTableMenu) {
+    try {
+      return await ui.presentTableMenu(options);
+    } catch (error) {
+      console.error(`WebView menu failed: ${error.message}`);
+    }
+  }
+  return presentTableMenuNative(options);
+}
+
+async function presentTableMenuNative({ title, subtitle, sections }) {
   let selectedId = null;
   const table = new UITable();
   table.showSeparators = true;
@@ -686,6 +733,14 @@ async function presentTableMenu({ title, subtitle, sections }) {
 }
 
 async function promptForText(title, message, defaultText = "") {
+  const ui = getUIModule();
+  if (ui?.presentPrompt) {
+    try {
+      return await ui.presentPrompt(title, message, defaultText);
+    } catch (error) {
+      console.error(`WebView prompt failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   alert.message = message;
@@ -697,6 +752,14 @@ async function promptForText(title, message, defaultText = "") {
 }
 
 async function confirm(title, message) {
+  const ui = getUIModule();
+  if (ui?.presentConfirm) {
+    try {
+      return await ui.presentConfirm(title, message);
+    } catch (error) {
+      console.error(`WebView confirm failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   alert.message = message;
@@ -706,6 +769,14 @@ async function confirm(title, message) {
 }
 
 async function chooseFromList(title, items, message = null) {
+  const ui = getUIModule();
+  if (ui?.presentPicker) {
+    try {
+      return await ui.presentPicker(title, items, message);
+    } catch (error) {
+      console.error(`WebView picker failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   if (message) {
@@ -719,6 +790,14 @@ async function chooseFromList(title, items, message = null) {
 }
 
 async function chooseBoolean(title, message, currentValue) {
+  const ui = getUIModule();
+  if (ui?.presentBoolean) {
+    try {
+      return await ui.presentBoolean(title, message, currentValue);
+    } catch (error) {
+      console.error(`WebView boolean picker failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   alert.message = message;

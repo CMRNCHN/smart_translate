@@ -10,7 +10,7 @@
 //
 // Requires (modular) or paste scripts/dist/SmartTranslatePro.js
 //
-// Version: 1.1.0-lean
+// Version: 1.1.0-pro-standalone
 
 let Shared;
 let Conversation;
