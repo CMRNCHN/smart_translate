@@ -1,0 +1,42 @@
+Hi — here’s SmartTranslate for your iPhone. No computer needed.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — Install Scriptable (free)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Open the App Store
+2. Search: Scriptable (by Simon Støvring)
+3. Install and open it once
+
+https://apps.apple.com/app/scriptable/id1405459188
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — Install SmartTranslate (one time)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Open this link in Safari on your iPhone:
+https://raw.githubusercontent.com/CMRNCHN/smart_translate/cursor/scriptable-only-bundler/scripts/dist/install-smarttranslate.js
+
+2. When the code page loads: Select All → Copy
+3. Open Scriptable → tap + → new script (any name)
+4. Delete the default text → Paste → tap ▶ Run
+5. Choose SmartTranslate (v1) or SmartTranslate Pro
+
+The installer deletes itself. Next time, run SmartTranslate from your Scriptable list.
+
+Full guide (if you get stuck):
+https://github.com/CMRNCHN/smart_translate/blob/cursor/scriptable-only-bundler/GET-STARTED-IPHONE.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — DeepL API key (when the app asks)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Paste this key when SmartTranslate prompts you (one time — it saves on your phone):
+
+REPLACE_THIS_LINE_WITH_YOUR_DEEPL_KEY_BEFORE_SENDING
+
+You can skip ElevenLabs if asked — Apple voice works fine.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — Use it
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scriptable → SmartTranslate → Run
+
+Translate by typing, pasting, dictating, or conversation mode.

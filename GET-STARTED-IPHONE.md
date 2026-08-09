@@ -85,6 +85,9 @@ The installer will:
 
 SmartTranslate needs a DeepL key to translate. You only enter it once; it stays in your iPhone Keychain.
 
+**If a friend sent you a key in a private message:** paste that when the app asks.
+
+**Otherwise:**
 1. Get a free key: https://www.deepl.com/your-account/keys  
    - Sign up if needed.  
    - Free keys usually end with **`:fx`** — that is normal.
