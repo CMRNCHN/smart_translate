@@ -279,6 +279,390 @@ async function configureSecret(title, keychainKey, message, options = {}) {
 }
 
 // ============================================================
+// API KEY WIZARD
+// ============================================================
+
+const API_KEY_SERVICES = {
+  deepl: {
+    id: "deepl",
+    label: "DeepL",
+    keychainKey: DEEPL_KEYCHAIN_KEY,
+    required: true,
+    signupUrl: "https://www.deepl.com/your-account/keys",
+    hint: "Required for all translations. Free keys often end with :fx."
+  },
+  elevenlabs: {
+    id: "elevenlabs",
+    label: "ElevenLabs",
+    keychainKey: ELEVENLABS_KEYCHAIN_KEY,
+    required: false,
+    signupUrl: "https://elevenlabs.io/app/settings/api-keys",
+    hint: "Optional. Enables premium AI voices instead of Apple speech."
+  }
+};
+
+function clearSecret(keychainKey) {
+  if (typeof Keychain.remove === "function") {
+    Keychain.remove(keychainKey);
+    return;
+  }
+  Keychain.set(keychainKey, "");
+}
+
+function getApiKeyStatus() {
+  const build = (service) => {
+    const saved = hasSecret(service.keychainKey);
+    const value = saved ? getOptionalKey(service.keychainKey) : null;
+    return {
+      id: service.id,
+      label: service.label,
+      keychainKey: service.keychainKey,
+      signupUrl: service.signupUrl,
+      hint: service.hint,
+      required: !!service.required,
+      saved,
+      masked: saved ? maskSecret(value) : "(not set)",
+      maskedLabel: saved ? `Saved ${maskSecret(value)}` : "Not set"
+    };
+  };
+
+  return {
+    deepl: build(API_KEY_SERVICES.deepl),
+    elevenlabs: build(API_KEY_SERVICES.elevenlabs)
+  };
+}
+
+function openApiKeySignup(serviceId) {
+  const service = API_KEY_SERVICES[serviceId];
+  if (!service?.signupUrl) {
+    return;
+  }
+  Safari.open(service.signupUrl);
+}
+
+async function verifyDeepLKey(apiKey) {
+  const key = String(apiKey || "").trim();
+  if (!key) {
+    throw new Error("DeepL API key is empty.");
+  }
+  const host = key.endsWith(":fx")
+    ? "https://api-free.deepl.com"
+    : "https://api.deepl.com";
+  const request = new Request(`${host}/v2/usage`);
+  request.method = "GET";
+  request.timeoutInterval = DEEPL_TIMEOUT;
+  request.headers = { Authorization: `DeepL-Auth-Key ${key}` };
+  const response = await request.load();
+  if (response.statusCode === 200) {
+    return true;
+  }
+  throw new Error(`DeepL rejected the key (HTTP ${response.statusCode}).`);
+}
+
+async function verifyElevenLabsKey(apiKey) {
+  const key = String(apiKey || "").trim();
+  if (!key) {
+    throw new Error("ElevenLabs API key is empty.");
+  }
+  await fetchElevenLabsVoices(key);
+  return true;
+}
+
+async function verifyApiKey(serviceId, apiKey) {
+  if (serviceId === "deepl") {
+    return verifyDeepLKey(apiKey);
+  }
+  if (serviceId === "elevenlabs") {
+    return verifyElevenLabsKey(apiKey);
+  }
+  throw new Error(`Unknown API key service: ${serviceId}`);
+}
+
+async function promptForSecureApiKey(service, options = {}) {
+  const ui = getUIModule();
+  if (ui?.presentSecurePrompt) {
+    try {
+      const value = await ui.presentSecurePrompt(
+        `${service.label} API Key`,
+        options.message ||
+          `Paste your ${service.label} API key. It is stored in Scriptable Keychain on this iPhone only.`,
+        "Paste API key here…"
+      );
+      if (value) {
+        return value;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Secure WebView prompt failed: ${error.message}`);
+    }
+  }
+
+  return await configureSecret(
+    `${service.label} API Key`,
+    service.keychainKey,
+    options.message ||
+      `Paste your ${service.label} API key once. It stays in Scriptable Keychain.`,
+    { allowKeepExisting: false }
+  );
+}
+
+async function copySecretToClipboard(serviceId) {
+  const service = API_KEY_SERVICES[serviceId];
+  const key = getOptionalKey(service.keychainKey);
+  if (!key) {
+    await showError(`No ${service.label} key is saved.`);
+    return false;
+  }
+
+  const shouldCopy = await confirm(
+    `Copy ${service.label} Key`,
+    `Copy the full API key to your clipboard?\n\nMasked: ${maskSecret(key)}\n\nOnly copy on a device you trust.`
+  );
+  if (!shouldCopy) {
+    return false;
+  }
+
+  Pasteboard.copy(key);
+  await showSuccess(
+    "Copied",
+    `${service.label} API key copied to clipboard.\n\nPaste it only where you need it, then clear your clipboard if you want.`
+  );
+  return true;
+}
+
+async function testSavedApiKey(serviceId) {
+  const service = API_KEY_SERVICES[serviceId];
+  const key = getOptionalKey(service.keychainKey);
+  if (!key) {
+    await showError(`No ${service.label} key is saved.`);
+    return false;
+  }
+
+  try {
+    await verifyApiKey(serviceId, key);
+    await showSuccess(
+      `${service.label} Key OK`,
+      `Your saved ${service.label} key works.\n\nMasked: ${maskSecret(key)}`
+    );
+    return true;
+  } catch (error) {
+    await showError(
+      `${service.label} Test Failed`,
+      error?.message || "The saved key could not be verified."
+    );
+    return false;
+  }
+}
+
+async function saveApiKey(serviceId, apiKey, options = {}) {
+  const service = API_KEY_SERVICES[serviceId];
+  const trimmed = String(apiKey || "").trim();
+  if (!trimmed) {
+    throw new Error(`${service.label} API key cannot be empty.`);
+  }
+  if (options.verify !== false) {
+    await verifyApiKey(serviceId, trimmed);
+  }
+  Keychain.set(service.keychainKey, trimmed);
+  return trimmed;
+}
+
+async function presentApiKeyDetailAction(serviceId) {
+  const service = API_KEY_SERVICES[serviceId];
+  const status = getApiKeyStatus()[serviceId];
+  const ui = getUIModule();
+
+  if (ui?.presentApiKeyDetail) {
+    try {
+      return await ui.presentApiKeyDetail(status);
+    } catch (error) {
+      console.error(`API key detail UI failed: ${error.message}`);
+    }
+  }
+
+  const rows = [];
+  if (status.saved) {
+    rows.push(
+      { id: "copy", title: "Copy Full Key", subtitle: status.masked, symbol: "doc.on.clipboard" },
+      { id: "paste", title: "Replace Key", symbol: "pencil" },
+      { id: "test", title: "Test Key", symbol: "checkmark.seal" },
+      { id: "remove", title: "Remove Key", symbol: "trash" }
+    );
+  } else {
+    rows.push({ id: "paste", title: "Paste API Key", symbol: "key" });
+  }
+  rows.push(
+    { id: "signup", title: `Get ${service.label} Key`, symbol: "globe" },
+    { id: "back", title: "Back", symbol: "chevron.left" }
+  );
+
+  return presentTableMenu({
+    title: `${service.label} API Key`,
+    subtitle: status.saved ? status.masked : "Not saved on this iPhone",
+    sections: [{ rows }]
+  });
+}
+
+async function runApiKeyServiceWizard(serviceId, options = {}) {
+  const service = API_KEY_SERVICES[serviceId];
+  const required = options.required ?? !!service.required;
+
+  while (true) {
+    const action = await presentApiKeyDetailAction(serviceId);
+    if (!action || action === "back") {
+      return hasSecret(service.keychainKey) ? getOptionalKey(service.keychainKey) : null;
+    }
+
+    if (action === "signup") {
+      openApiKeySignup(serviceId);
+      continue;
+    }
+
+    if (action === "copy") {
+      await copySecretToClipboard(serviceId);
+      continue;
+    }
+
+    if (action === "test") {
+      await testSavedApiKey(serviceId);
+      continue;
+    }
+
+    if (action === "remove") {
+      const shouldRemove = await confirm(
+        `Remove ${service.label} Key?`,
+        "This deletes the saved key from Scriptable Keychain on this iPhone."
+      );
+      if (shouldRemove) {
+        clearSecret(service.keychainKey);
+        await showSuccess(
+          "Key Removed",
+          `${service.label} key removed from Keychain.`
+        );
+      }
+      continue;
+    }
+
+    if (action === "paste") {
+      const newKey = await promptForSecureApiKey(service, options);
+      if (!newKey) {
+        if (required) {
+          await showError(`${service.label} key is required.`);
+          continue;
+        }
+        return null;
+      }
+
+      try {
+        await saveApiKey(serviceId, newKey);
+        await showSuccess(
+          `${service.label} Key Saved`,
+          `Stored as ${maskSecret(newKey)} in Scriptable Keychain.\n\nKeychain entry:\n${service.keychainKey}`
+        );
+        return newKey;
+      } catch (error) {
+        await showError(
+          `${service.label} Key Not Saved`,
+          error?.message || "Could not verify the key."
+        );
+      }
+    }
+  }
+}
+
+async function runApiKeyWizard(options = {}) {
+  const mode = options.mode || "hub";
+
+  if (mode === "deepl") {
+    return !!(await runApiKeyServiceWizard("deepl", {
+      required: options.required !== false
+    }));
+  }
+
+  if (mode === "elevenlabs") {
+    const result = await runApiKeyServiceWizard("elevenlabs", {
+      required: !!options.required
+    });
+    return result;
+  }
+
+  if (options.isFirstRun) {
+    await showSuccess(
+      "API Keys",
+      "SmartTranslate stores API keys in Scriptable Keychain on your iPhone.\n\nDeepL is required. ElevenLabs is optional."
+    );
+  }
+
+  while (true) {
+    const status = getApiKeyStatus();
+    const ui = getUIModule();
+    let action = null;
+
+    if (ui?.presentApiKeyWizardHub) {
+      try {
+        action = await ui.presentApiKeyWizardHub(status);
+      } catch (error) {
+        console.error(`API key hub UI failed: ${error.message}`);
+      }
+    }
+
+    if (!action) {
+      action = await presentTableMenu({
+        title: "API Keys",
+        subtitle: "Stored in Scriptable Keychain on this iPhone",
+        sections: [
+          {
+            rows: [
+              {
+                id: "deepl_manage",
+                title: "DeepL",
+                subtitle: status.deepl.maskedLabel,
+                symbol: "key"
+              },
+              {
+                id: "eleven_manage",
+                title: "ElevenLabs",
+                subtitle: status.elevenlabs.maskedLabel,
+                symbol: "key"
+              },
+              { id: "done", title: "Done", symbol: "checkmark.circle" }
+            ]
+          }
+        ]
+      });
+    }
+
+    if (!action || action === "done") {
+      if (options.requireDeepL && !hasSecret(DEEPL_KEYCHAIN_KEY)) {
+        await showError("DeepL key is required before you can translate.");
+        continue;
+      }
+      return hasSecret(DEEPL_KEYCHAIN_KEY);
+    }
+
+    if (action === "deepl_manage" || action === "deepl") {
+      await runApiKeyServiceWizard("deepl", { required: false });
+      continue;
+    }
+
+    if (action === "eleven_manage" || action === "elevenlabs") {
+      await runApiKeyServiceWizard("elevenlabs", { required: false });
+      continue;
+    }
+
+    if (action === "deepl_signup") {
+      openApiKeySignup("deepl");
+      continue;
+    }
+
+    if (action === "eleven_signup") {
+      openApiKeySignup("elevenlabs");
+      continue;
+    }
+  }
+}
+
+// ============================================================
 // DEEPL
 // ============================================================
 
@@ -586,7 +970,33 @@ async function dictateText(config) {
 // UI HELPERS
 // ============================================================
 
+function getUIModule() {
+  try {
+    if (typeof UI !== "undefined" && UI) {
+      return UI;
+    }
+  } catch (error) {
+    // Ignore — UI may not exist in modular installs.
+  }
+  try {
+    return importModule("SmartTranslateUI");
+  } catch (error) {
+    return null;
+  }
+}
+
 async function showError(message) {
+  const ui = getUIModule();
+  if (ui?.presentMessage) {
+    try {
+      await ui.presentMessage("SmartTranslate Error", message, {
+        variant: "error"
+      });
+      return;
+    } catch (error) {
+      console.error(`WebView error UI failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = "SmartTranslate Error";
   alert.message = message;
@@ -595,6 +1005,15 @@ async function showError(message) {
 }
 
 async function showSuccess(title, message) {
+  const ui = getUIModule();
+  if (ui?.presentMessage) {
+    try {
+      await ui.presentMessage(title, message, { variant: "success" });
+      return;
+    } catch (error) {
+      console.error(`WebView success UI failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   alert.message = message;
@@ -614,7 +1033,19 @@ async function showSuccess(title, message) {
  *
  * Returns the selected row id, or null if dismissed.
  */
-async function presentTableMenu({ title, subtitle, sections }) {
+async function presentTableMenu(options) {
+  const ui = getUIModule();
+  if (ui?.presentTableMenu) {
+    try {
+      return await ui.presentTableMenu(options);
+    } catch (error) {
+      console.error(`WebView menu failed: ${error.message}`);
+    }
+  }
+  return presentTableMenuNative(options);
+}
+
+async function presentTableMenuNative({ title, subtitle, sections }) {
   let selectedId = null;
   const table = new UITable();
   table.showSeparators = true;
@@ -686,6 +1117,14 @@ async function presentTableMenu({ title, subtitle, sections }) {
 }
 
 async function promptForText(title, message, defaultText = "") {
+  const ui = getUIModule();
+  if (ui?.presentPrompt) {
+    try {
+      return await ui.presentPrompt(title, message, defaultText);
+    } catch (error) {
+      console.error(`WebView prompt failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   alert.message = message;
@@ -697,6 +1136,14 @@ async function promptForText(title, message, defaultText = "") {
 }
 
 async function confirm(title, message) {
+  const ui = getUIModule();
+  if (ui?.presentConfirm) {
+    try {
+      return await ui.presentConfirm(title, message);
+    } catch (error) {
+      console.error(`WebView confirm failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   alert.message = message;
@@ -706,6 +1153,14 @@ async function confirm(title, message) {
 }
 
 async function chooseFromList(title, items, message = null) {
+  const ui = getUIModule();
+  if (ui?.presentPicker) {
+    try {
+      return await ui.presentPicker(title, items, message);
+    } catch (error) {
+      console.error(`WebView picker failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   if (message) {
@@ -719,6 +1174,14 @@ async function chooseFromList(title, items, message = null) {
 }
 
 async function chooseBoolean(title, message, currentValue) {
+  const ui = getUIModule();
+  if (ui?.presentBoolean) {
+    try {
+      return await ui.presentBoolean(title, message, currentValue);
+    } catch (error) {
+      console.error(`WebView boolean picker failed: ${error.message}`);
+    }
+  }
   const alert = new Alert();
   alert.title = title;
   alert.message = message;
@@ -858,6 +1321,14 @@ module.exports = {
   maskSecret,
   ensureSecret,
   configureSecret,
+  getApiKeyStatus,
+  runApiKeyWizard,
+  copySecretToClipboard,
+  testSavedApiKey,
+  verifyDeepLKey,
+  verifyElevenLabsKey,
+  openApiKeySignup,
+  clearSecret,
   translateWithDeepL,
   speakTranslation,
   fetchElevenLabsVoices,

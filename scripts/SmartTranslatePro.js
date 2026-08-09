@@ -10,16 +10,18 @@
 //
 // Requires (modular) or paste scripts/dist/SmartTranslatePro.js
 //
-// Version: 1.1.0-lean
+// Version: 1.1.0-pro-standalone
 
 let Shared;
 let Conversation;
 let Pro;
+let UI;
 let modulesLoaded = false;
 try {
   Shared = importModule("SmartTranslateShared");
   Conversation = importModule("SmartTranslateConversation");
   Pro = importModule("SmartTranslateProKit");
+  UI = importModule("SmartTranslateUI");
   modulesLoaded = true;
 } catch (error) {
   const alert = new Alert();
@@ -30,6 +32,7 @@ try {
     "• SmartTranslateShared\n" +
     "• SmartTranslateConversation\n" +
     "• SmartTranslateProKit\n" +
+    "• SmartTranslateUI\n" +
     "• SmartTranslatePro\n\n" +
     "Or paste scripts/dist/SmartTranslatePro.js as ONE script.";
   alert.addAction("OK");
@@ -105,7 +108,61 @@ async function runProAction(action, config) {
 // HOME MENU
 // ============================================================
 
+async function buildHomeContext(config) {
+  const sessions = await Conversation.loadAllSessions();
+  const active = await Shared.loadJSON(Shared.ACTIVE_SESSION_FILE);
+  const peopleData = await Shared.loadJSON(Shared.PEOPLE_FILE);
+  const people = Array.isArray(peopleData) ? peopleData : [];
+
+  let favoriteCount = 0;
+  for (const session of sessions) {
+    if (session.intelligence && session.intelligence.favorite) {
+      favoriteCount += 1;
+    }
+  }
+
+  const libraryMeta =
+    sessions.length === 0
+      ? "No saved chats yet"
+      : `${sessions.length} chat${sessions.length === 1 ? "" : "s"}${favoriteCount ? ` · ${favoriteCount} ★` : ""}`;
+
+  const peopleMeta =
+    people.length === 0
+      ? "Add people as you chat"
+      : `${people.length} profile${people.length === 1 ? "" : "s"}`;
+
+  return {
+    primaryLang: Shared.getLanguageDisplayName(config.languages.primary),
+    conversationLang: Shared.getLanguageDisplayName(config.languages.conversation),
+    primaryFlag: UI.flagForCode(config.languages.primary),
+    conversationFlag: UI.flagForCode(config.languages.conversation),
+    engine: config.speech.engine === "apple" ? "Apple Voice" : "ElevenLabs",
+    activeSession: active?.person?.name
+      ? {
+          name: active.person.name,
+          turns: active.session?.turnCount || 0
+        }
+      : null,
+    libraryMeta,
+    peopleMeta
+  };
+}
+
 async function showMainMenu(config) {
+  const context = await buildHomeContext(config);
+
+  if (UI && typeof UI.presentProHome === "function") {
+    const action = await UI.presentProHome(context);
+    if (!action) {
+      return "cancel";
+    }
+    return action;
+  }
+
+  return await showMainMenuFallback(config);
+}
+
+async function showMainMenuFallback(config) {
   const engine = config.speech.engine === "apple" ? "Apple" : "ElevenLabs";
   const pair = `${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
 
@@ -272,7 +329,7 @@ async function runSettingsMenu(config) {
               title: "API Keys",
               subtitle: deeplSaved
                 ? `DeepL ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}${elevenSaved ? " · ElevenLabs saved" : ""}`
-                : "Add DeepL key (one time)",
+                : "Set up DeepL and ElevenLabs",
               symbol: "key"
             },
             {
@@ -307,46 +364,7 @@ async function runSettingsMenu(config) {
 }
 
 async function manageApiKeys() {
-  let forceDeepLPrompt = false;
-  if (Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY)) {
-    const shouldReplace = await Shared.confirm(
-      "DeepL Key",
-      `Already saved: ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}\n\nReplace it?`
-    );
-    if (!shouldReplace) {
-      await Shared.showSuccess(
-        "DeepL Key",
-        "Keeping the saved Keychain key. You will not be asked during translate."
-      );
-    } else {
-      forceDeepLPrompt = true;
-    }
-  }
-
-  if (forceDeepLPrompt || !Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY)) {
-    const deepl = await Shared.ensureSecret(
-      "DeepL API Key",
-      Shared.DEEPL_KEYCHAIN_KEY,
-      "Paste your DeepL API key once. It is stored in Scriptable Keychain and reused automatically.\n\nhttps://www.deepl.com/your-account/keys",
-      { forcePrompt: forceDeepLPrompt }
-    );
-    if (!deepl) {
-      return;
-    }
-    await Shared.showSuccess(
-      "DeepL Key Saved",
-      `Stored as ${Shared.maskSecret(deepl)}.\n\nYou will not be asked again unless you change it here.`
-    );
-  }
-
-  if (await Shared.confirm("ElevenLabs?", "Update ElevenLabs API key too?")) {
-    await Shared.ensureSecret(
-      "ElevenLabs API Key",
-      Shared.ELEVENLABS_KEYCHAIN_KEY,
-      "Optional. Paste your ElevenLabs key to store it in Keychain.",
-      { forcePrompt: true }
-    );
-  }
+  await Shared.runApiKeyWizard({ mode: "hub" });
 }
 
 // ============================================================
@@ -367,12 +385,12 @@ async function runSetupWizard(isFirstRun, existingConfig, options = {}) {
   }
 
   if (promptForKeys || !Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY)) {
-    const deeplKey = await Shared.ensureSecret(
-      "DeepL API Key",
-      Shared.DEEPL_KEYCHAIN_KEY,
-      "Paste your DeepL API key once. It stays in Scriptable Keychain.\n\nhttps://www.deepl.com/your-account/keys"
-    );
-    if (!deeplKey) {
+    const keysOk = await Shared.runApiKeyWizard({
+      mode: "deepl",
+      required: true,
+      isFirstRun: !!isFirstRun
+    });
+    if (!keysOk) {
       return null;
     }
   }
@@ -440,11 +458,10 @@ async function runSetupWizard(isFirstRun, existingConfig, options = {}) {
       1.0
     );
   } else {
-    const elevenLabsKey = await Shared.ensureSecret(
-      "ElevenLabs API Key",
-      Shared.ELEVENLABS_KEYCHAIN_KEY,
-      "Paste your ElevenLabs API key once. Stored in Keychain."
-    );
+    const elevenLabsKey = await Shared.runApiKeyWizard({
+      mode: "elevenlabs",
+      required: false
+    });
     config.speech.elevenlabs.enabled = !!elevenLabsKey;
 
     if (config.speech.elevenlabs.enabled) {

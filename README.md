@@ -2,6 +2,10 @@
 
 Scriptable app for bidirectional translation with optional conversation transcripts.
 
+**New user on iPhone only?** See **[GET-STARTED-IPHONE.md](GET-STARTED-IPHONE.md)** — Scriptable install, no computer or Cursor required.
+
+**Sending to a friend?** Copy **[SHIP-TO-FRIEND.txt](SHIP-TO-FRIEND.txt)** (add your DeepL key in the private message only — never commit it to git).
+
 ## Install (easiest — installer script)
 
 1. On your iPhone, open the installer raw link in [`scripts/dist/LINKS.md`](scripts/dist/LINKS.md) (`install-smarttranslate.js`).

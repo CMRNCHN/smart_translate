@@ -34,10 +34,12 @@
 
 let Shared;
 let Conversation;
+let UI;
 let modulesLoaded = false;
 try {
   Shared = importModule("SmartTranslateShared");
   Conversation = importModule("SmartTranslateConversation");
+  UI = importModule("SmartTranslateUI");
   modulesLoaded = true;
 } catch (error) {
   const alert = new Alert();
@@ -47,6 +49,7 @@ try {
     "Fix: In Scriptable, create separate scripts named EXACTLY:\n" +
     "• SmartTranslateShared\n" +
     "• SmartTranslateConversation\n" +
+    "• SmartTranslateUI\n" +
     "• SmartTranslate\n\n" +
     "Paste each matching file from the repo scripts/ folder.\n\n" +
     "Easier option: paste scripts/dist/SmartTranslate.js as ONE script.";
@@ -78,30 +81,35 @@ async function main() {
     }
   }
 
-  const action = await showMainMenu(config);
-
-  switch (action) {
-    case "type":
-      await runType(config);
-      break;
-    case "paste":
-      await runPaste(config);
-      break;
-    case "dictate":
-      await runDictate(config);
-      break;
-    case "conversation":
-      await Conversation.runConversation(config);
-      break;
-    case "settings": {
-      const newConfig = await runSetupWizard(false, config);
-      if (newConfig) {
-        await Shared.saveConfig(newConfig);
-      }
+  while (true) {
+    const action = await showMainMenu(config);
+    if (!action || action === "cancel") {
       break;
     }
-    default:
-      break;
+
+    switch (action) {
+      case "type":
+        await runType(config);
+        break;
+      case "paste":
+        await runPaste(config);
+        break;
+      case "dictate":
+        await runDictate(config);
+        break;
+      case "conversation":
+        await Conversation.runConversation(config);
+        break;
+      case "settings": {
+        const updated = await runSettingsMenu(config);
+        if (updated) {
+          config = updated;
+        }
+        break;
+      }
+      default:
+        break;
+    }
   }
 }
 
@@ -110,32 +118,43 @@ async function main() {
 // ============================================================
 
 async function showMainMenu(config) {
-  const alert = new Alert();
-  alert.title = "SmartTranslate";
-  const engine = config.speech.engine === "apple" ? "Apple" : "ElevenLabs";
-  alert.message = `Speech: ${engine}\n${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
-  alert.addAction("Type");
-  alert.addAction("Paste");
-  alert.addAction("Dictate");
-  alert.addAction("Conversation");
-  alert.addAction("Settings");
-  alert.addCancelAction("Cancel");
+  const engine = config.speech.engine === "apple" ? "Apple Voice" : "ElevenLabs";
+  const context = {
+    primaryLang: Shared.getLanguageDisplayName(config.languages.primary),
+    conversationLang: Shared.getLanguageDisplayName(config.languages.conversation),
+    primaryFlag: UI.flagForCode(config.languages.primary),
+    conversationFlag: UI.flagForCode(config.languages.conversation),
+    engine
+  };
 
-  const choice = await alert.presentAlert();
-  switch (choice) {
-    case 0:
-      return "type";
-    case 1:
-      return "paste";
-    case 2:
-      return "dictate";
-    case 3:
-      return "conversation";
-    case 4:
-      return "settings";
-    default:
-      return "cancel";
+  if (UI?.presentV1Home) {
+    const action = await UI.presentV1Home(context);
+    return action || "cancel";
   }
+
+  const choice = await Shared.presentTableMenu({
+    title: "SmartTranslate",
+    subtitle: `${context.primaryLang} ↔ ${context.conversationLang} · ${engine}`,
+    sections: [
+      {
+        header: "Translate",
+        rows: [
+          { id: "type", title: "Type", subtitle: "Enter text", symbol: "keyboard" },
+          { id: "paste", title: "Paste", subtitle: "From clipboard", symbol: "doc.on.clipboard" },
+          { id: "dictate", title: "Dictate", subtitle: "Speak to translate", symbol: "mic" }
+        ]
+      },
+      {
+        header: "More",
+        rows: [
+          { id: "conversation", title: "Conversation", subtitle: "Multi-turn sessions", symbol: "person.2" },
+          { id: "settings", title: "Settings", subtitle: "Languages and keys", symbol: "gearshape" }
+        ]
+      }
+    ]
+  });
+
+  return choice || "cancel";
 }
 
 // ============================================================
@@ -181,7 +200,65 @@ async function runDictate(config) {
 // SETUP / SETTINGS
 // ============================================================
 
-async function runSetupWizard(isFirstRun, existingConfig) {
+async function runSettingsMenu(config) {
+  while (true) {
+    const deeplSaved = Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY);
+    const elevenSaved = Shared.hasSecret(Shared.ELEVENLABS_KEYCHAIN_KEY);
+    const choice = await Shared.presentTableMenu({
+      title: "Settings",
+      subtitle: deeplSaved
+        ? `DeepL saved ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}`
+        : "DeepL key missing",
+      sections: [
+        {
+          rows: [
+            {
+              id: "preferences",
+              title: "Languages & Speech",
+              subtitle: "Targets, dictation, voice engine",
+              symbol: "globe"
+            },
+            {
+              id: "keys",
+              title: "API Keys",
+              subtitle: deeplSaved
+                ? `DeepL ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}${elevenSaved ? " · ElevenLabs saved" : ""}`
+                : "Set up DeepL and ElevenLabs",
+              symbol: "key"
+            },
+            {
+              id: "test",
+              title: "Test Translation",
+              subtitle: "Verify DeepL + speech",
+              symbol: "checkmark.seal"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
+      return config;
+    }
+
+    if (choice === "preferences") {
+      const newConfig = await runSetupWizard(false, config, {
+        promptForKeys: false
+      });
+      if (newConfig) {
+        await Shared.saveConfig(newConfig);
+        config = newConfig;
+      }
+    } else if (choice === "keys") {
+      await Shared.runApiKeyWizard({ mode: "hub" });
+    } else if (choice === "test") {
+      await testConfiguration(config);
+    }
+  }
+}
+
+async function runSetupWizard(isFirstRun, existingConfig, options = {}) {
+  const promptForKeys = options.promptForKeys !== false;
   let config = Shared.deepMerge(Shared.DEFAULT_CONFIG, existingConfig || {});
 
   if (isFirstRun) {
@@ -193,13 +270,15 @@ async function runSetupWizard(isFirstRun, existingConfig) {
     await welcome.present();
   }
 
-  const deeplKey = await Shared.ensureSecret(
-    "DeepL API Key",
-    Shared.DEEPL_KEYCHAIN_KEY,
-    "Paste your DeepL API key once. It stays in Scriptable Keychain and is reused automatically.\n\nhttps://www.deepl.com/your-account/keys"
-  );
-  if (!deeplKey) {
-    return null;
+  if (promptForKeys) {
+    const keysOk = await Shared.runApiKeyWizard({
+      mode: "deepl",
+      required: true,
+      isFirstRun: !!isFirstRun
+    });
+    if (!keysOk) {
+      return null;
+    }
   }
 
   config.languages.primary = await Shared.chooseLanguage(
@@ -271,11 +350,10 @@ async function runSetupWizard(isFirstRun, existingConfig) {
       2.0
     );
   } else {
-    const elevenLabsKey = await Shared.configureSecret(
-      "ElevenLabs API Key",
-      Shared.ELEVENLABS_KEYCHAIN_KEY,
-      "Enter your ElevenLabs API key."
-    );
+    const elevenLabsKey = await Shared.runApiKeyWizard({
+      mode: "elevenlabs",
+      required: false
+    });
     config.speech.elevenlabs.enabled = !!elevenLabsKey;
 
     if (config.speech.elevenlabs.enabled) {
