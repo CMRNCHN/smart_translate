@@ -128,6 +128,8 @@ function testWebViewHtml() {
   assertIncludes("Pro home has library", proHtml, 'data-action="library"');
   assertIncludes("Pro home background fallback", proHtml, "#070b14");
   assertIncludes("Pro home boot script", proHtml, "data-action");
+  assertIncludes("Pro home uses abstract SVG icons", proHtml, 'class="ui-icon"');
+  assertIncludes("Pro home SVG stroke icons", proHtml, "<svg viewBox");
   assertIncludes("Pro home DOCTYPE", proHtml, "<!DOCTYPE html>");
 
   if (proHtml.length < 4000) {

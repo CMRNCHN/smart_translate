@@ -2,7 +2,7 @@
 //
 // WebView UI kit — mockup-style screens for all SmartTranslate menus.
 //
-// Version: 2.1.1
+// Version: 2.2.0
 
 const LANGUAGE_FLAGS = {
   AR: "🇸🇦",
@@ -25,35 +25,85 @@ const LANGUAGE_FLAGS = {
   UK: "🇺🇦"
 };
 
-const SYMBOL_EMOJI = {
-  "magnifyingglass": "🔍",
-  "star.fill": "⭐",
-  star: "☆",
-  "list.bullet": "📋",
-  "square.and.arrow.up": "📤",
-  "person.fill": "👤",
-  "person.badge.plus": "➕",
-  "person.crop.circle": "👤",
-  "person.2": "💬",
-  "play.fill": "▶️",
-  clock: "🕐",
-  "checkmark.circle": "✅",
-  trash: "🗑️",
-  "plus.bubble": "💬",
-  "bubble.left.and.bubble.right": "💬",
-  "text.bubble": "💬",
-  "doc.text": "📄",
-  "text.alignleft": "📝",
-  keyboard: "⌨️",
-  "doc.on.clipboard": "📋",
-  mic: "🎤",
-  gearshape: "⚙️",
-  "books.vertical": "📚",
-  globe: "🌐",
-  key: "🔑",
-  "checkmark.seal": "✓",
-  pencil: "✏️",
-  "character.bubble": "💬"
+const ICON_PATHS = {
+  default: '<circle cx="12" cy="12" r="2.5"/>',
+  globe:
+    '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.8 3.8 5.6 3.8 8.5s-1.3 5.7-3.8 8.5M12 3.5c-2.5 2.8-3.8 5.6-3.8 8.5s1.3 5.7 3.8 8.5"/>',
+  type:
+    '<rect x="4" y="7" width="16" height="10" rx="2.5"/><path d="M8 11h8M8 14.5h5"/>',
+  paste:
+    '<rect x="7" y="5" width="11" height="14" rx="2"/><path d="M9 5V4.5A1.5 1.5 0 0 1 10.5 3h5A1.5 1.5 0 0 1 17 4.5V5"/><path d="M9.5 12h7M9.5 15h4"/>',
+  dictate:
+    '<rect x="9.5" y="4" width="5" height="9" rx="2.5"/><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3"/>',
+  library:
+    '<path d="M5 6.5h5v11H5zM14 6.5h5v11h-5z"/><path d="M7.5 9h0M16.5 9h0M7.5 12h0M16.5 12h0"/>',
+  people:
+    '<circle cx="9" cy="10" r="2.8"/><circle cx="15.5" cy="10" r="2.8"/><path d="M4.5 18.5c.8-2.4 2.6-3.8 4.5-3.8s3.7 1.4 4.5 3.8M13.5 18.5c.8-2.4 2.6-3.8 4.5-3.8"/>',
+  conversation:
+    '<path d="M5 7.5h9.5a2 2 0 0 1 2 2V14l-2.5 2.5H7a2 2 0 0 1-2-2V7.5z"/><path d="M10.5 14.5h6a2 2 0 0 1 2 2V17l2 2"/>',
+  settings:
+    '<circle cx="12" cy="12" r="2.8"/><path d="M12 3.5v2.2M12 18.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/>',
+  speaker:
+    '<path d="M8 10.5v3l3 2.2V8.3L8 10.5z"/><path d="M14.5 9.5a3 3 0 0 1 0 5M16.8 7.2a5.5 5.5 0 0 1 0 9.6"/>',
+  search:
+    '<circle cx="11" cy="11" r="5.5"/><path d="M15.5 15.5L19 19"/>',
+  star:
+    '<path d="M12 4.5l1.6 3.6 3.9.4-2.9 2.6.9 3.8-3.5-2.1-3.5 2.1.9-3.8-2.9-2.6 3.9-.4z"/>',
+  list: '<path d="M6 7.5h12M6 12h12M6 16.5h12"/>',
+  share:
+    '<path d="M12 4.5v11M8.5 8l3.5-3.5L15.5 8"/><rect x="5" y="15.5" width="14" height="4" rx="1.2"/>',
+  person:
+    '<circle cx="12" cy="9" r="3"/><path d="M5.5 18.5c.9-2.8 3-4.5 6.5-4.5s5.6 1.7 6.5 4.5"/>',
+  "person-add":
+    '<circle cx="10" cy="10" r="2.6"/><path d="M5 17.5c.7-2.2 2.3-3.5 5-3.5"/><path d="M17 8.5v5M14.5 11h5"/>',
+  play: '<path d="M9.5 7.5l7.5 4.5-7.5 4.5z"/>',
+  clock:
+    '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+  check:
+    '<circle cx="12" cy="12" r="8"/><path d="M8.2 12.2l2.4 2.4 5.2-5.4"/>',
+  trash:
+    '<path d="M6 7.5h12M9 7.5V6h6v1.5"/><path d="M8 7.5l.6 10h6.8l.6-10"/>',
+  doc:
+    '<path d="M8 4.5h6l3.5 3.5V19a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 19V6A1.5 1.5 0 0 1 8 4.5z"/><path d="M14 4.5V9h4"/>',
+  text:
+    '<path d="M6 6.5h12M6 12h9M6 17.5h11"/>',
+  key:
+    '<circle cx="9" cy="13" r="3.2"/><path d="M12.2 13H18v2.5M16 13v4"/>',
+  pencil:
+    '<path d="M5 19l2-1 9.5-9.5 2.5 2.5L9.5 20.5 5 19z"/><path d="M14.5 7.5l2.5 2.5"/>',
+  chat:
+    '<path d="M5.5 6.5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H10l-3 3v-3h-1.5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z"/>'
+};
+
+const SYMBOL_ICON = {
+  magnifyingglass: "search",
+  "star.fill": "star",
+  star: "star",
+  "list.bullet": "list",
+  "square.and.arrow.up": "share",
+  "person.fill": "person",
+  "person.badge.plus": "person-add",
+  "person.crop.circle": "person",
+  "person.2": "conversation",
+  "play.fill": "play",
+  clock: "clock",
+  "checkmark.circle": "check",
+  trash: "trash",
+  "plus.bubble": "chat",
+  "bubble.left.and.bubble.right": "conversation",
+  "text.bubble": "chat",
+  "doc.text": "doc",
+  "text.alignleft": "text",
+  keyboard: "type",
+  "doc.on.clipboard": "paste",
+  mic: "dictate",
+  gearshape: "settings",
+  "books.vertical": "library",
+  globe: "globe",
+  key: "key",
+  "checkmark.seal": "check",
+  pencil: "pencil",
+  "character.bubble": "chat"
 };
 
 const TINT_CLASSES = ["blue", "green", "purple", "orange", "slate"];
@@ -81,11 +131,24 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function iconForSymbol(symbol, index) {
-  if (!symbol) {
-    return "•";
+function resolveIconId(symbolOrId) {
+  if (ICON_PATHS[symbolOrId]) {
+    return symbolOrId;
   }
-  return SYMBOL_EMOJI[symbol] || "•";
+  if (SYMBOL_ICON[symbolOrId]) {
+    return SYMBOL_ICON[symbolOrId];
+  }
+  return "default";
+}
+
+function renderIcon(symbolOrId) {
+  const id = resolveIconId(symbolOrId);
+  const paths = ICON_PATHS[id] || ICON_PATHS.default;
+  return `<span class="ui-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${paths}</svg></span>`;
+}
+
+function iconForSymbol(symbol) {
+  return renderIcon(symbol);
 }
 
 function tintClass(index) {
@@ -166,17 +229,26 @@ const UI_STYLES = `
   .hero-inner { position: relative; z-index: 1; }
   .hero-icon {
     width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
-    background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.18); margin-bottom: 14px; font-size: 22px;
+    background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.18); margin-bottom: 14px;
+    color: rgba(255, 255, 255, 0.95);
   }
+  .ui-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+  .ui-icon svg {
+    width: 22px; height: 22px; stroke: currentColor; fill: none;
+    stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .hero-icon .ui-icon svg { width: 24px; height: 24px; stroke-width: 1.5; }
+  .tile-icon .ui-icon svg { width: 21px; height: 21px; }
   .lang-pair { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
   .lang-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
   .lang-chip .flag { font-size: 24px; }
   .lang-arrow { color: rgba(255, 255, 255, 0.72); font-size: 18px; font-weight: 600; }
   .voice-pill {
-    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600;
     color: rgba(255, 255, 255, 0.92); background: rgba(0, 0, 0, 0.18);
     border: 1px solid rgba(255, 255, 255, 0.14); padding: 6px 12px; border-radius: 999px;
   }
+  .voice-pill .ui-icon svg { width: 14px; height: 14px; opacity: 0.9; }
   .section { margin-bottom: 18px; }
   .section-title { margin: 0 0 10px 4px; font-size: 13px; font-weight: 600; color: var(--text-tertiary); }
   .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -188,7 +260,7 @@ const UI_STYLES = `
   .tile:active { transform: scale(0.97); }
   .tile-icon {
     width: 42px; height: 42px; margin: 0 auto 10px; border-radius: 14px;
-    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    display: flex; align-items: center; justify-content: center;
   }
   .tile-icon.blue { color: #93c5fd; background: rgba(79, 140, 255, 0.16); }
   .tile-icon.green { color: #6ee7b7; background: rgba(52, 211, 153, 0.14); }
@@ -204,13 +276,14 @@ const UI_STYLES = `
   .list-row:active, .continue-card:active, .btn-row:active { transform: scale(0.99); }
   .row-icon {
     width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center;
-    justify-content: center; flex-shrink: 0; font-size: 18px;
+    justify-content: center; flex-shrink: 0;
   }
-  .row-icon.blue { background: rgba(79, 140, 255, 0.14); }
-  .row-icon.green { background: rgba(52, 211, 153, 0.14); }
-  .row-icon.purple { background: rgba(167, 139, 250, 0.14); }
-  .row-icon.orange { background: rgba(251, 146, 60, 0.14); }
-  .row-icon.slate { background: rgba(148, 163, 184, 0.14); }
+  .row-icon.blue { color: #93c5fd; background: rgba(79, 140, 255, 0.14); }
+  .row-icon.green { color: #6ee7b7; background: rgba(52, 211, 153, 0.14); }
+  .row-icon.purple { color: #c4b5fd; background: rgba(167, 139, 250, 0.14); }
+  .row-icon.orange { color: #fdba74; background: rgba(251, 146, 60, 0.14); }
+  .row-icon.slate { color: #cbd5e1; background: rgba(148, 163, 184, 0.14); }
+  .row-icon .ui-icon svg { width: 19px; height: 19px; }
   .row-text, .continue-text { flex: 1; min-width: 0; }
   .row-title, .continue-title { display: block; font-size: 16px; font-weight: 650; margin-bottom: 2px; }
   .row-sub, .continue-sub {
@@ -309,10 +382,10 @@ function renderPageHeader(title, subtitle) {
 
 function renderListRow(item, index) {
   const tint = tintClass(index);
-  const emoji = iconForSymbol(item.symbol, index);
+  const icon = iconForSymbol(item.symbol);
   const chevron = item.disclosure !== false ? `<span class="chevron">›</span>` : "";
   return `<button type="button" class="list-row" data-action="${escapeHtml(item.id)}">
-    <span class="row-icon ${tint}">${emoji}</span>
+    <span class="row-icon ${tint}">${icon}</span>
     <span class="row-text">
       <span class="row-title">${escapeHtml(item.title)}</span>
       ${item.subtitle ? `<span class="row-sub">${escapeHtml(item.subtitle)}</span>` : ""}
@@ -480,6 +553,14 @@ async function bindPromptHandlers(webView, includeEmptySubmit) {
   );
 }
 
+function renderTile(action, label, tint, iconId) {
+  return `<button type="button" class="tile" data-action="${escapeHtml(action)}"><div class="tile-icon ${escapeHtml(tint)}">${renderIcon(iconId)}</div><span class="tile-label">${escapeHtml(label)}</span></button>`;
+}
+
+function renderHomeRow(action, title, subtitle, tint, iconId) {
+  return `<button type="button" class="list-row" data-action="${escapeHtml(action)}"><span class="row-icon ${escapeHtml(tint)}">${renderIcon(iconId)}</span><span class="row-text"><span class="row-title">${escapeHtml(title)}</span><span class="row-sub">${escapeHtml(subtitle)}</span></span><span class="chevron">›</span></button>`;
+}
+
 function buildProHomeHTML(context) {
   const c = context || {};
   const primaryFlag = escapeHtml(c.primaryFlag || "🌐");
@@ -507,30 +588,30 @@ function buildProHomeHTML(context) {
   const body = `<div class="app">
     ${renderTopbar("SmartTranslate", "Pro")}
     <header class="hero"><div class="hero-inner">
-      <div class="hero-icon">🌐</div>
+      <div class="hero-icon">${renderIcon("globe")}</div>
       <div class="lang-pair">
         <span class="lang-chip"><span class="flag">${primaryFlag}</span>${primaryLang}</span>
         <span class="lang-arrow">↔</span>
         <span class="lang-chip"><span class="flag">${conversationFlag}</span>${conversationLang}</span>
       </div>
-      <span class="voice-pill">🔊 ${engine}</span>
+      <span class="voice-pill">${renderIcon("speaker")}<span>${engine}</span></span>
     </div></header>
     <section class="section">
       <h2 class="section-title">Quick actions</h2>
       <div class="tiles">
-        <button type="button" class="tile" data-action="type"><div class="tile-icon blue">⌨️</div><span class="tile-label">Type</span></button>
-        <button type="button" class="tile" data-action="paste"><div class="tile-icon green">📋</div><span class="tile-label">Paste</span></button>
-        <button type="button" class="tile" data-action="dictate"><div class="tile-icon orange">🎤</div><span class="tile-label">Dictate</span></button>
+        ${renderTile("type", "Type", "blue", "type")}
+        ${renderTile("paste", "Paste", "green", "paste")}
+        ${renderTile("dictate", "Dictate", "orange", "dictate")}
       </div>
     </section>
     ${continueBlock}
     <section class="section">
       <h2 class="section-title">Saved</h2>
       <div class="list">
-        <button type="button" class="list-row" data-action="library"><span class="row-icon blue">📚</span><span class="row-text"><span class="row-title">Library</span><span class="row-sub">${libraryMeta}</span></span><span class="chevron">›</span></button>
-        <button type="button" class="list-row" data-action="people"><span class="row-icon purple">👥</span><span class="row-text"><span class="row-title">People</span><span class="row-sub">${peopleMeta}</span></span><span class="chevron">›</span></button>
-        <button type="button" class="list-row" data-action="conversation"><span class="row-icon green">💬</span><span class="row-text"><span class="row-title">Conversation</span><span class="row-sub">Multi-turn with a person</span></span><span class="chevron">›</span></button>
-        <button type="button" class="list-row" data-action="settings"><span class="row-icon slate">⚙️</span><span class="row-text"><span class="row-title">Settings</span><span class="row-sub">Languages, keys, speech</span></span><span class="chevron">›</span></button>
+        ${renderHomeRow("library", "Library", libraryMeta, "blue", "library")}
+        ${renderHomeRow("people", "People", peopleMeta, "purple", "people")}
+        ${renderHomeRow("conversation", "Conversation", "Multi-turn with a person", "green", "conversation")}
+        ${renderHomeRow("settings", "Settings", "Languages, keys, speech", "slate", "settings")}
       </div>
     </section>
   </div>`;
@@ -543,27 +624,27 @@ function buildV1HomeHTML(context) {
   const body = `<div class="app">
     ${renderTopbar("SmartTranslate", null)}
     <header class="hero"><div class="hero-inner">
-      <div class="hero-icon">🌐</div>
+      <div class="hero-icon">${renderIcon("globe")}</div>
       <div class="lang-pair">
         <span class="lang-chip"><span class="flag">${escapeHtml(c.primaryFlag || "🌐")}</span>${escapeHtml(c.primaryLang || "")}</span>
         <span class="lang-arrow">↔</span>
         <span class="lang-chip"><span class="flag">${escapeHtml(c.conversationFlag || "🌐")}</span>${escapeHtml(c.conversationLang || "")}</span>
       </div>
-      <span class="voice-pill">🔊 ${escapeHtml(c.engine || "Apple Voice")}</span>
+      <span class="voice-pill">${renderIcon("speaker")}<span>${escapeHtml(c.engine || "Apple Voice")}</span></span>
     </div></header>
     <section class="section">
       <h2 class="section-title">Quick actions</h2>
       <div class="tiles">
-        <button type="button" class="tile" data-action="type"><div class="tile-icon blue">⌨️</div><span class="tile-label">Type</span></button>
-        <button type="button" class="tile" data-action="paste"><div class="tile-icon green">📋</div><span class="tile-label">Paste</span></button>
-        <button type="button" class="tile" data-action="dictate"><div class="tile-icon orange">🎤</div><span class="tile-label">Dictate</span></button>
+        ${renderTile("type", "Type", "blue", "type")}
+        ${renderTile("paste", "Paste", "green", "paste")}
+        ${renderTile("dictate", "Dictate", "orange", "dictate")}
       </div>
     </section>
     <section class="section">
       <h2 class="section-title">More</h2>
       <div class="list">
-        <button type="button" class="list-row" data-action="conversation"><span class="row-icon green">💬</span><span class="row-text"><span class="row-title">Conversation</span><span class="row-sub">Multi-turn sessions</span></span><span class="chevron">›</span></button>
-        <button type="button" class="list-row" data-action="settings"><span class="row-icon slate">⚙️</span><span class="row-text"><span class="row-title">Settings</span><span class="row-sub">Languages and API keys</span></span><span class="chevron">›</span></button>
+        ${renderHomeRow("conversation", "Conversation", "Multi-turn sessions", "green", "conversation")}
+        ${renderHomeRow("settings", "Settings", "Languages and API keys", "slate", "settings")}
       </div>
     </section>
   </div>`;
@@ -802,6 +883,7 @@ async function presentV1Home(context) {
 
 module.exports = {
   flagForCode,
+  renderIcon,
   buildProHomeHTML,
   buildV1HomeHTML,
   buildListMenuHTML,
