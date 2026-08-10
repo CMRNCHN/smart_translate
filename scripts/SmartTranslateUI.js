@@ -2,7 +2,7 @@
 //
 // WebView UI kit — mockup-style screens for all SmartTranslate menus.
 //
-// Version: 2.1.0
+// Version: 2.1.1
 
 const LANGUAGE_FLAGS = {
   AR: "🇸🇦",
@@ -131,7 +131,8 @@ const UI_STYLES = `
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; padding: 0; min-height: 100%;
-    background: var(--bg); color: var(--text);
+    background: #070b14; background: var(--bg, #070b14);
+    color: #f4f7ff; color: var(--text, #f4f7ff);
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
@@ -256,6 +257,29 @@ const UI_STYLES = `
 `;
 
 function wrapDocument(pageTitle, bodyHtml) {
+  const bootScript = `<script>
+(function () {
+  function send(action) {
+    if (typeof completion === "function") {
+      completion(action);
+    }
+  }
+  function bind() {
+    document.addEventListener("click", function (event) {
+      var target = event.target.closest("[data-action]");
+      if (!target) return;
+      event.preventDefault();
+      send(target.getAttribute("data-action"));
+    }, true);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bind, { once: true });
+  } else {
+    bind();
+  }
+})();
+</script>`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -265,7 +289,7 @@ function wrapDocument(pageTitle, bodyHtml) {
 <title>${escapeHtml(pageTitle || "SmartTranslate")}</title>
 <style>${UI_STYLES}</style>
 </head>
-<body>${bodyHtml}</body>
+<body>${bodyHtml}${bootScript}</body>
 </html>`;
 }
 
@@ -551,18 +575,29 @@ function resetSession() {
   sessionPresentPromise = null;
 }
 
+function pauseMs(ms) {
+  return new Promise((resolve) => {
+    Timer.schedule(ms / 1000, false, () => {
+      resolve();
+    });
+  });
+}
+
 async function waitForTapAction(webView) {
   return webView.evaluateJavaScript(
-    `(function () {
+    `new Promise(function (resolve) {
+      function finish(action) {
+        resolve(action);
+      }
       function handler(event) {
         var target = event.target.closest("[data-action]");
         if (!target) return;
         event.preventDefault();
         document.removeEventListener("click", handler, true);
-        completion(target.getAttribute("data-action"));
+        finish(target.getAttribute("data-action"));
       }
       document.addEventListener("click", handler, true);
-    })();`,
+    })`,
     true
   );
 }
@@ -572,19 +607,28 @@ async function presentScreen(html) {
     return null;
   }
 
+  const isNewSession = !sessionWebView;
   if (!sessionWebView) {
     sessionWebView = new WebView();
-    await sessionWebView.loadHTML(html);
-    sessionPresentPromise = sessionWebView.present(true).then(() => {
+  }
+
+  await sessionWebView.loadHTML(html);
+
+  let dismissPromise = sessionPresentPromise;
+  if (isNewSession) {
+    dismissPromise = sessionWebView.present(false).then(() => {
       resetSession();
       return null;
     });
+    sessionPresentPromise = dismissPromise;
+    // Scriptable can render a blank WebView if evaluateJavaScript runs before present().
+    await pauseMs(300);
   } else {
-    await sessionWebView.loadHTML(html);
+    await pauseMs(80);
   }
 
   const actionPromise = waitForTapAction(sessionWebView);
-  return Promise.race([actionPromise, sessionPresentPromise]);
+  return Promise.race([actionPromise, dismissPromise]);
 }
 
 async function presentTableMenu(options) {
@@ -688,20 +732,28 @@ async function presentPrompt(title, message, defaultText, options) {
     return null;
   }
 
+  const isNewSession = !sessionWebView;
   if (!sessionWebView) {
     sessionWebView = new WebView();
-    await sessionWebView.loadHTML(html);
-    sessionPresentPromise = sessionWebView.present(true).then(() => {
+  }
+
+  await sessionWebView.loadHTML(html);
+
+  let dismissPromise = sessionPresentPromise;
+  if (isNewSession) {
+    dismissPromise = sessionWebView.present(false).then(() => {
       resetSession();
       return null;
     });
+    sessionPresentPromise = dismissPromise;
+    await pauseMs(300);
   } else {
-    await sessionWebView.loadHTML(html);
+    await pauseMs(80);
   }
 
   const raw = await Promise.race([
     bindPromptHandlers(sessionWebView, true),
-    sessionPresentPromise
+    dismissPromise
   ]);
 
   const parsed = parseCompletion(raw);
