@@ -25,8 +25,22 @@ SmartTranslate is a [Scriptable](https://scriptable.app/) app (JavaScript that r
 - After UI changes, run `node tools/bundle.mjs` and commit `scripts/dist/`.
 
 ### Syntax checking / lint / test
-- There is **no ESLint/Prettier config and no automated test suite**.
-- To syntax-check a script, treat it as an ES module because the sources/bundles use top-level `await`: `node --check --input-type=module < scripts/dist/SmartTranslate.js`. Plain `node --check <file>.js` parses as CommonJS and will falsely fail on the top-level `await`.
+- There is **no ESLint/Prettier config**. Automated checks live in **`tools/test-smarttranslate.mjs`**.
+- Run the full suite: `node tools/test-smarttranslate.mjs`
+- What it verifies without an iPhone:
+  - Bundler determinism (`node tools/bundle.mjs` leaves `dist/` unchanged)
+  - ES module syntax of both standalone bundles
+  - Installer build outputs and config URLs
+  - Pro/v1 WebView HTML is non-empty and includes required actions
+  - WebView **present() runs before evaluateJavaScript()** (blank-screen regression)
+  - Pro falls back to native UITable if WebView throws
+- Optional live DeepL check when `DEEPL_API_KEY` is set (Runtime Secret in Cursor).
+- Manual syntax check: `node --check --input-type=module < scripts/dist/SmartTranslate.js`. Plain `node --check <file>.js` parses as CommonJS and will falsely fail on top-level `await`.
+
+### Cursor Cloud environment
+- `.cursor/environment.json` runs `node tools/test-smarttranslate.mjs` on environment build/install.
+- Agents should run the same command after UI/bundler/installer changes.
+- **Cannot** run Scriptable, Keychain, Speech, or iCloud here — iPhone remains required for true end-to-end testing.
 
 ### DeepL key checker (optional)
 - `tools/check-deepl.sh` verifies a DeepL key against the live DeepL API (needs network + a valid key). Pass the key as an argument or via `DEEPL_API_KEY`; free-tier keys end in `:fx`. With no key it just prints usage and exits 1.
