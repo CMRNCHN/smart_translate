@@ -134,8 +134,12 @@ async function buildHomeContext(config) {
   return {
     primaryLang: Shared.getLanguageDisplayName(config.languages.primary),
     conversationLang: Shared.getLanguageDisplayName(config.languages.conversation),
-    primaryFlag: UI.flagForCode(config.languages.primary),
-    conversationFlag: UI.flagForCode(config.languages.conversation),
+    primaryFlag: UI?.flagForCode
+      ? UI.flagForCode(config.languages.primary)
+      : "🌐",
+    conversationFlag: UI?.flagForCode
+      ? UI.flagForCode(config.languages.conversation)
+      : "🌐",
     engine: config.speech.engine === "apple" ? "Apple Voice" : "ElevenLabs",
     activeSession: active?.person?.name
       ? {
@@ -152,11 +156,15 @@ async function showMainMenu(config) {
   const context = await buildHomeContext(config);
 
   if (UI && typeof UI.presentProHome === "function") {
-    const action = await UI.presentProHome(context);
-    if (!action) {
-      return "cancel";
+    try {
+      const action = await UI.presentProHome(context);
+      if (!action) {
+        return "cancel";
+      }
+      return action;
+    } catch (error) {
+      console.error(`Pro home WebView failed: ${error?.message || error}`);
     }
-    return action;
   }
 
   return await showMainMenuFallback(config);

@@ -122,14 +122,22 @@ async function showMainMenu(config) {
   const context = {
     primaryLang: Shared.getLanguageDisplayName(config.languages.primary),
     conversationLang: Shared.getLanguageDisplayName(config.languages.conversation),
-    primaryFlag: UI.flagForCode(config.languages.primary),
-    conversationFlag: UI.flagForCode(config.languages.conversation),
+    primaryFlag: UI?.flagForCode
+      ? UI.flagForCode(config.languages.primary)
+      : "🌐",
+    conversationFlag: UI?.flagForCode
+      ? UI.flagForCode(config.languages.conversation)
+      : "🌐",
     engine
   };
 
   if (UI?.presentV1Home) {
-    const action = await UI.presentV1Home(context);
-    return action || "cancel";
+    try {
+      const action = await UI.presentV1Home(context);
+      return action || "cancel";
+    } catch (error) {
+      console.error(`v1 home WebView failed: ${error?.message || error}`);
+    }
   }
 
   const choice = await Shared.presentTableMenu({
