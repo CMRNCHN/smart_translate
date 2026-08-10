@@ -33,6 +33,12 @@ Rebuild standalones after editing modular sources:
 node tools/bundle.mjs
 ```
 
+Run automated checks (bundler, installers, WebView HTML, blank-screen regression):
+
+```bash
+node tools/test-smarttranslate.mjs
+```
+
 ## Install (modular — multiple scripts)
 
 `importModule` only works if each dependency exists as its **own Scriptable script** with the **exact** name (no spaces, matching capitalization). Scriptable does **not** load modules from this git repo folder automatically.
