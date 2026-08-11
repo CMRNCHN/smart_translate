@@ -2818,7 +2818,7 @@ const UI = (function () {
 //
 // WebView UI kit — mockup-style screens for all SmartTranslate menus.
 //
-// Version: 2.2.0
+// Version: 2.2.1
 
 const LANGUAGE_FLAGS = {
   AR: "🇸🇦",
@@ -3146,29 +3146,6 @@ const UI_STYLES = `
 `;
 
 function wrapDocument(pageTitle, bodyHtml) {
-  const bootScript = `<script>
-(function () {
-  function send(action) {
-    if (typeof completion === "function") {
-      completion(action);
-    }
-  }
-  function bind() {
-    document.addEventListener("click", function (event) {
-      var target = event.target.closest("[data-action]");
-      if (!target) return;
-      event.preventDefault();
-      send(target.getAttribute("data-action"));
-    }, true);
-  }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bind, { once: true });
-  } else {
-    bind();
-  }
-})();
-</script>`;
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3178,7 +3155,7 @@ function wrapDocument(pageTitle, bodyHtml) {
 <title>${escapeHtml(pageTitle || "SmartTranslate")}</title>
 <style>${UI_STYLES}</style>
 </head>
-<body>${bodyHtml}${bootScript}</body>
+<body>${bodyHtml}</body>
 </html>`;
 }
 
@@ -3482,19 +3459,17 @@ function pauseMs(ms) {
 
 async function waitForTapAction(webView) {
   return webView.evaluateJavaScript(
-    `new Promise(function (resolve) {
-      function finish(action) {
-        resolve(action);
-      }
+    `(function () {
       function handler(event) {
         var target = event.target.closest("[data-action]");
         if (!target) return;
         event.preventDefault();
         document.removeEventListener("click", handler, true);
-        finish(target.getAttribute("data-action"));
+        var action = target.getAttribute("data-action") || "";
+        completion(String(action));
       }
       document.addEventListener("click", handler, true);
-    })`,
+    })();`,
     true
   );
 }
