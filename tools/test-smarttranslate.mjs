@@ -226,6 +226,7 @@ function testBundleRegressionGuards() {
   const uiSource = read("scripts/SmartTranslateUI.js");
   assertIncludes("UI defines pauseMs", uiSource, "function pauseMs");
   assertIncludes("UI uses present(false)", uiSource, "present(false)");
+  assertIncludes("UI tap handler uses completion()", uiSource, "completion(String(action))");
   assertIncludes("Pro has WebView fallback", read("scripts/SmartTranslatePro.js"), "showMainMenuFallback");
 }
 
