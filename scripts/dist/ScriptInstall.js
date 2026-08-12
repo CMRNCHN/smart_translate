@@ -6,7 +6,7 @@
 // 1. Edit INSTALLER below (or use a preconfigured install-*.js from scripts/dist/).
 // 2. Paste this entire file into Scriptable and run it once.
 //
-// Version: 1.0.0
+// Version: 2.0.0
 
 // ============================================================
 // CONFIGURE YOUR INSTALL
@@ -14,6 +14,7 @@
 
 const INSTALLER = {
   "title": "Script Installer",
+  "version": "2.0.0",
   "deleteSelf": true,
   "runAfterInstall": true,
   "confirmOverwrite": true,
@@ -24,7 +25,17 @@ const INSTALLER = {
 // INSTALLER RUNTIME (usually no need to edit below)
 // ============================================================
 
-const RUNTIME_VERSION = "1.0.0";
+const RUNTIME_VERSION = "2.0.0";
+
+function installerVersion() {
+  return String(INSTALLER.version || RUNTIME_VERSION).trim();
+}
+
+function installerTitle() {
+  const title = INSTALLER.title || "Script Installer";
+  const version = installerVersion();
+  return version ? `${title} v${version}` : title;
+}
 
 function getFileManager() {
   return FileManager.iCloud();
@@ -96,7 +107,7 @@ async function downloadSource(item) {
   const request = new Request(item.url);
   request.timeoutInterval = item.timeoutSeconds || 90;
   request.headers = {
-    "User-Agent": item.userAgent || `ScriptInstall/${RUNTIME_VERSION}`
+    "User-Agent": item.userAgent || `ScriptInstall/${installerVersion()}`
   };
   const text = await request.loadString();
   validateSource(text, item);
@@ -173,10 +184,10 @@ async function showError(error) {
 
 async function presentItemMenu() {
   const alert = new Alert();
-  alert.title = INSTALLER.title || "Script Installer";
+  alert.title = installerTitle();
   alert.message = INSTALLER.deleteSelf
-    ? "Choose what to install. This installer script will be removed afterward."
-  : "Choose what to install.";
+    ? "Choose what to install. Bundle versions are shown on each option. This installer script will be removed afterward."
+    : "Choose what to install. Bundle versions are shown on each option.";
 
   for (const item of INSTALLER.items) {
     alert.addAction(`Install ${item.label || item.scriptName}`);
