@@ -1,0 +1,3 @@
+{
+  "install": "node --version\nchmod +x tools/check-deepl.sh tools/test-smarttranslate.mjs\nnode tools/test-smarttranslate.mjs"
+}

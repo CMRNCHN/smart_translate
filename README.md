@@ -2,7 +2,23 @@
 
 Scriptable app for bidirectional translation with optional conversation transcripts.
 
-## Install (easiest — one script)
+**New user on iPhone only?** See **[GET-STARTED-IPHONE.md](GET-STARTED-IPHONE.md)** — Scriptable install, no computer or Cursor required.
+
+**Sending to a friend?** Copy **[SHIP-TO-FRIEND.txt](SHIP-TO-FRIEND.txt)** (add your DeepL key in the private message only — never commit it to git).
+
+## Install (easiest — installer script)
+
+1. On your iPhone, open the installer raw link in [`scripts/dist/LINKS.md`](scripts/dist/LINKS.md) (`install-smarttranslate.js`).
+2. In **Scriptable**, create one new script (any name), paste the installer, and **run it once**.
+3. Choose **Install SmartTranslate (v1)** or **Install SmartTranslate Pro**.
+
+The installer downloads the bundle, saves it as a real Scriptable script with the correct name, **removes itself**, and opens the app. Next time, run `SmartTranslate` or `SmartTranslatePro` directly from your script list.
+
+### Generic installer for other scripts
+
+[`scripts/ScriptInstall.js`](scripts/ScriptInstall.js) is a reusable installer — edit `INSTALLER.items` with any `scriptName` and download `url`, paste into Scriptable, run once. Rebuild preconfigured installers with `node tools/build-installer.mjs` (see `scripts/installers/*.json`).
+
+## Install (manual — one script)
 
 1. Open **Scriptable**.
 2. Create one new script (any name, e.g. `SmartTranslate`).
@@ -15,6 +31,12 @@ Rebuild standalones after editing modular sources:
 
 ```bash
 node tools/bundle.mjs
+```
+
+Run automated checks (bundler, installers, WebView HTML, blank-screen regression):
+
+```bash
+node tools/test-smarttranslate.mjs
 ```
 
 ## Install (modular — multiple scripts)
@@ -62,27 +84,19 @@ If you only paste `SmartTranslate.js`, you get: **Error on line 28: no file to i
 
 One-shot modes do **not** save translation history.
 
-## Pro Menu
-
-Everything in v1, plus:
+## Pro Menu (lean)
 
 | Action | What it does |
 |--------|----------------|
-| **Library** | Search, favorites, browse, filter by tag, export |
-| **People** | Profiles, notes, languages, memory, per-person chats |
-| **Timeline** | Today / Yesterday / Last 7 Days / This Month / Older |
-| **Statistics** | Totals, average length, top language, longest chat |
-| **Learning** | Vocabulary hints from a conversation |
-| **Voice Profiles** | Review per-language TTS setup |
+| **Quick Translate ›** | Type / Paste / Dictate |
+| **Conversation** | Multi-turn session + short save summary |
+| **Library** | Search, favorites, browse, export |
+| **People** | Profiles and past chats |
+| **Settings** | Languages, API keys, speech |
 
-When you **end a conversation in Pro**, it runs intelligence automatically:
+Home stays open (UITable) until you dismiss it. Post-session only shows a short summary + optional favorite.
 
-1. Summary (extractive, or OpenAI if configured)
-2. Purpose + auto tags
-3. Manual tag edit
-4. Favorite prompt
-5. Memory extraction → confirm save to person profile
-6. Optional export (Markdown / JSON / TXT / HTML)
+**Not in lean Pro UI:** Timeline, Statistics, Learning, Voice Profiles menu, OpenAI summaries, memory prompts, long tag/purpose wizards.
 
 ## Storage (iCloud)
 

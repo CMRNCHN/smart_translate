@@ -1,0 +1,23 @@
+{
+  "title": "SmartTranslate Installer",
+  "version": "2.0.0",
+  "deleteSelf": true,
+  "runAfterInstall": true,
+  "confirmOverwrite": true,
+  "items": [
+    {
+      "scriptName": "SmartTranslate",
+      "label": "SmartTranslate",
+      "url": "https://raw.githubusercontent.com/CMRNCHN/smart_translate/cursor/scriptable-only-bundler/scripts/dist/SmartTranslate.js",
+      "minBytes": 5000,
+      "mustContain": "async function main"
+    },
+    {
+      "scriptName": "SmartTranslatePro",
+      "label": "SmartTranslate Pro",
+      "url": "https://raw.githubusercontent.com/CMRNCHN/smart_translate/cursor/scriptable-only-bundler/scripts/dist/SmartTranslatePro.js",
+      "minBytes": 5000,
+      "mustContain": "async function main"
+    }
+  ]
+}

@@ -1,0 +1,264 @@
+// ScriptInstall.js
+//
+// Generic Scriptable installer: download a remote .js file, save it as a named
+// script in your Scriptable library, optionally run it, and remove this installer.
+//
+// 1. Edit INSTALLER below (or use a preconfigured install-*.js from scripts/dist/).
+// 2. Paste this entire file into Scriptable and run it once.
+//
+// Version: 2.0.0
+
+// ============================================================
+// CONFIGURE YOUR INSTALL
+// ============================================================
+
+const INSTALLER = {
+  "title": "Script Installer",
+  "version": "2.0.0",
+  "deleteSelf": true,
+  "runAfterInstall": true,
+  "confirmOverwrite": true,
+  "items": []
+};
+
+// ============================================================
+// INSTALLER RUNTIME (usually no need to edit below)
+// ============================================================
+
+const RUNTIME_VERSION = "2.0.0";
+
+function installerVersion() {
+  return String(INSTALLER.version || RUNTIME_VERSION).trim();
+}
+
+function installerTitle() {
+  const title = INSTALLER.title || "Script Installer";
+  const version = installerVersion();
+  return version ? `${title} v${version}` : title;
+}
+
+function getFileManager() {
+  return FileManager.iCloud();
+}
+
+function sanitizeScriptName(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) {
+    throw new Error("scriptName is required.");
+  }
+  if (/[\\/]/.test(trimmed)) {
+    throw new Error(`Invalid script name: ${trimmed}`);
+  }
+  return trimmed;
+}
+
+function getDocumentsDirectory() {
+  return getFileManager().documentsDirectory();
+}
+
+function getInstalledScriptPath(scriptName) {
+  const fm = getFileManager();
+  return fm.joinPath(getDocumentsDirectory(), `${sanitizeScriptName(scriptName)}.js`);
+}
+
+function getInstallerPaths() {
+  const fm = getFileManager();
+  const dir = getDocumentsDirectory();
+  const name = Script.name();
+  const candidates = [
+    fm.joinPath(dir, `${name}.js`),
+    fm.joinPath(dir, `${name}.script`)
+  ];
+  return candidates.filter((path) => fm.fileExists(path));
+}
+
+function buildRunUrl(scriptName) {
+  const encoded = encodeURIComponent(sanitizeScriptName(scriptName));
+  return `scriptable:///run?scriptName=${encoded}`;
+}
+
+function validateSource(source, item) {
+  const label = item.label || item.scriptName;
+  const minBytes = item.minBytes != null ? item.minBytes : 200;
+
+  if (!source || source.length < minBytes) {
+    throw new Error(`${label} download looks too small. Check the URL and connection.`);
+  }
+
+  const mustContain = item.mustContain;
+  if (mustContain) {
+    const checks = Array.isArray(mustContain) ? mustContain : [mustContain];
+    for (const needle of checks) {
+      if (!source.includes(needle)) {
+        throw new Error(`${label} download failed validation (missing "${needle}").`);
+      }
+    }
+  }
+
+  if (item.mustMatch) {
+    const pattern = new RegExp(item.mustMatch);
+    if (!pattern.test(source)) {
+      throw new Error(`${label} download failed validation (pattern mismatch).`);
+    }
+  }
+}
+
+async function downloadSource(item) {
+  const request = new Request(item.url);
+  request.timeoutInterval = item.timeoutSeconds || 90;
+  request.headers = {
+    "User-Agent": item.userAgent || `ScriptInstall/${installerVersion()}`
+  };
+  const text = await request.loadString();
+  validateSource(text, item);
+  return text;
+}
+
+async function confirmOverwrite(scriptName) {
+  if (!INSTALLER.confirmOverwrite) {
+    return true;
+  }
+
+  const path = getInstalledScriptPath(scriptName);
+  const fm = getFileManager();
+  if (!fm.fileExists(path)) {
+    return true;
+  }
+
+  const alert = new Alert();
+  alert.title = "Replace existing script?";
+  alert.message = `"${scriptName}" already exists in Scriptable.\n\nReplace it with the downloaded version?`;
+  alert.addAction("Replace");
+  alert.addAction("Cancel");
+  return (await alert.presentAlert()) === 0;
+}
+
+async function installItem(item) {
+  const scriptName = sanitizeScriptName(item.scriptName);
+  const label = item.label || scriptName;
+
+  if (!(await confirmOverwrite(scriptName))) {
+    return { installed: false, scriptName, label };
+  }
+
+  const source = await downloadSource(item);
+  const path = getInstalledScriptPath(scriptName);
+  getFileManager().writeString(path, source);
+
+  return { installed: true, scriptName, label, path, source };
+}
+
+function deleteInstallerScript() {
+  if (!INSTALLER.deleteSelf) {
+    return [];
+  }
+
+  const fm = getFileManager();
+  const removed = [];
+  for (const path of getInstallerPaths()) {
+    fm.remove(path);
+    removed.push(path);
+  }
+  return removed;
+}
+
+async function runInstalledScript(scriptName) {
+  Safari.open(buildRunUrl(scriptName));
+}
+
+async function showAlert(title, message) {
+  const alert = new Alert();
+  alert.title = title;
+  alert.message = message;
+  alert.addAction("OK");
+  await alert.presentAlert();
+}
+
+async function showError(error) {
+  const alert = new Alert();
+  alert.title = "Install failed";
+  alert.message = String(error && error.message ? error.message : error);
+  alert.addAction("OK");
+  await alert.presentAlert();
+}
+
+async function presentItemMenu() {
+  const alert = new Alert();
+  alert.title = installerTitle();
+  alert.message = INSTALLER.deleteSelf
+    ? "Choose what to install. Bundle versions are shown on each option. This installer script will be removed afterward."
+    : "Choose what to install. Bundle versions are shown on each option.";
+
+  for (const item of INSTALLER.items) {
+    alert.addAction(`Install ${item.label || item.scriptName}`);
+  }
+  alert.addAction("Cancel");
+
+  return await alert.presentAlert();
+}
+
+async function finishInstall(result) {
+  if (!result.installed) {
+    return;
+  }
+
+  const deleted = deleteInstallerScript();
+  const deletedNote = deleted.length > 0
+    ? "\n\nThis installer was removed from your script list."
+    : "";
+
+  if (INSTALLER.runAfterInstall) {
+    await showAlert(
+      "Installed",
+      `"${result.scriptName}" is ready.${deletedNote}\n\nOpening it now…`
+    );
+    await runInstalledScript(result.scriptName);
+    return;
+  }
+
+  await showAlert(
+    "Installed",
+    `"${result.scriptName}" was saved to Scriptable.${deletedNote}\n\nRun it from your script list.`
+  );
+}
+
+async function installFromMenuChoice(choiceIndex) {
+  const item = INSTALLER.items[choiceIndex];
+  await showAlert("Downloading…", `Fetching ${item.label || item.scriptName}…`);
+  const result = await installItem(item);
+  await finishInstall(result);
+}
+
+async function main() {
+  if (!INSTALLER.items || INSTALLER.items.length === 0) {
+    await showAlert(
+      "Nothing to install",
+      "Edit INSTALLER.items at the top of this script and add at least one entry with scriptName and url."
+    );
+    return;
+  }
+
+  if (INSTALLER.items.length === 1) {
+    const item = INSTALLER.items[0];
+    await showAlert("Downloading…", `Fetching ${item.label || item.scriptName}…`);
+    const result = await installItem(item);
+    await finishInstall(result);
+    return;
+  }
+
+  const choice = await presentItemMenu();
+  if (choice < 0 || choice >= INSTALLER.items.length) {
+    return;
+  }
+
+  await installFromMenuChoice(choice);
+}
+
+try {
+  await main();
+} catch (error) {
+  await showError(error);
+}
+
+Script.complete();
+

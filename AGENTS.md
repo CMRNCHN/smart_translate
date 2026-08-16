@@ -1,0 +1,46 @@
+# SmartTranslate
+
+SmartTranslate is a [Scriptable](https://scriptable.app/) app (JavaScript that runs inside the Scriptable iOS app). The only local developer tooling is a Node.js bundler and a Bash DeepL key checker. See `README.md` for install/usage details.
+
+## Cursor Cloud specific instructions
+
+### What can and cannot run here
+- The app scripts under `scripts/` target the Scriptable iOS runtime and use Scriptable-only globals (`Keychain`, `UITable`, `Speech`, `FileManager`, `importModule`, etc.). They **cannot be executed with plain `node`** in this environment — do not try to run them as a server or CLI. End-to-end product testing requires an actual iOS device with Scriptable, a DeepL key, and iCloud.
+- What you *can* run here is the developer tooling: the bundler and the DeepL check script.
+
+### Dependencies
+- There is **no `package.json`, lockfile, or npm dependency**. The bundler (`tools/bundle.mjs`) uses only Node built-ins, so there is no install step. Node.js is the only requirement and is already present in the base image (v22.x).
+
+### Core dev workflow (bundler)
+- Edit the modular sources in `scripts/*.js`, then regenerate the paste-ready single-file bundles with `node tools/bundle.mjs`.
+- The bundler is **deterministic**, and `scripts/dist/SmartTranslate.js` / `scripts/dist/SmartTranslatePro.js` are checked into git. After running the bundler with unchanged sources, `git diff` should be empty. Always commit regenerated bundles alongside source edits so `dist/` stays in sync.
+
+### Installers (`ScriptInstall`)
+- `scripts/ScriptInstall.runtime.js` is the shared installer runtime; `tools/build-installer.mjs` generates `scripts/dist/ScriptInstall.js` (generic) and `scripts/dist/install-*.js` from `scripts/installers/*.json`.
+- After changing installer configs or runtime, run `node tools/build-installer.mjs` and commit the generated `scripts/dist/` and `scripts/installers/*.install.js` files.
+
+### WebView UI (`SmartTranslateUI`)
+- `scripts/SmartTranslateUI.js` provides mockup-style WebView screens. `SmartTranslateShared.js` delegates `presentTableMenu`, `confirm`, `chooseFromList`, `chooseBoolean`, `promptForText`, `showError`, and `showSuccess` to the UI module when available.
+- Included in both Pro and v1 standalone bundles via `tools/bundle.mjs`. Modular installs need a `SmartTranslateUI` script in Scriptable.
+- After UI changes, run `node tools/bundle.mjs` and commit `scripts/dist/`.
+
+### Syntax checking / lint / test
+- There is **no ESLint/Prettier config**. Automated checks live in **`tools/test-smarttranslate.mjs`**.
+- Run the full suite: `node tools/test-smarttranslate.mjs`
+- What it verifies without an iPhone:
+  - Bundler determinism (`node tools/bundle.mjs` leaves `dist/` unchanged)
+  - ES module syntax of both standalone bundles
+  - Installer build outputs and config URLs
+  - Pro/v1 WebView HTML is non-empty and includes required actions
+  - WebView **present() runs before evaluateJavaScript()** (blank-screen regression)
+  - Pro falls back to native UITable if WebView throws
+- Optional live DeepL check when `DEEPL_API_KEY` is set (Runtime Secret in Cursor).
+- Manual syntax check: `node --check --input-type=module < scripts/dist/SmartTranslate.js`. Plain `node --check <file>.js` parses as CommonJS and will falsely fail on top-level `await`.
+
+### Cursor Cloud environment
+- `.cursor/environment.json` runs `node tools/test-smarttranslate.mjs` on environment build/install.
+- Agents should run the same command after UI/bundler/installer changes.
+- **Cannot** run Scriptable, Keychain, Speech, or iCloud here — iPhone remains required for true end-to-end testing.
+
+### DeepL key checker (optional)
+- `tools/check-deepl.sh` verifies a DeepL key against the live DeepL API (needs network + a valid key). Pass the key as an argument or via `DEEPL_API_KEY`; free-tier keys end in `:fx`. With no key it just prints usage and exits 1.

@@ -1,56 +1,40 @@
 // SmartTranslatePro.js
 //
-// SmartTranslate Pro — full feature entry for Scriptable.
+// SmartTranslate Pro — lean Scriptable entry.
 //
-// Includes everything in v1 plus:
-//   Library (search, favorites, tags, export)
-//   People directory + memory
-//   Statistics · Timeline · Learning Mode · Voice Profiles
-//   Post-conversation intelligence (summary, tags, memory, export)
+// Home:
+//   Translate › · Conversation · Library · People · Settings
 //
-// Requires (same Scriptable folder):
-//   SmartTranslateShared.js
-//   SmartTranslateConversation.js
-//   SmartTranslateProKit.js
+// Keep: search/favorites/export, people, light post-session summary
+// Dropped from UI: Insights (timeline/stats/learning/voices), long end wizard
 //
-// Storage: same iCloud SmartTranslate/ tree as v1, plus:
-//   SmartTranslate/exports/
+// Requires (modular) or paste scripts/dist/SmartTranslatePro.js
 //
-// Keychain:
-//   SMART_TRANSLATE_DEEPL_API_KEY
-//   SMART_TRANSLATE_ELEVENLABS_API_KEY
-//   SMART_TRANSLATE_OPENAI_API_KEY   (optional, richer summaries)
-//
-// Version: 1.0.0-pro
-//
-// IMPORTANT (Scriptable):
-// Create FOUR scripts with these EXACT names:
-//   SmartTranslateShared
-//   SmartTranslateConversation
-//   SmartTranslateProKit
-//   SmartTranslatePro
-// Or paste scripts/dist/SmartTranslatePro.js as ONE script.
+// Version: 1.1.0-pro-standalone
 
 let Shared;
 let Conversation;
 let Pro;
+let UI;
 let modulesLoaded = false;
 try {
   Shared = importModule("SmartTranslateShared");
   Conversation = importModule("SmartTranslateConversation");
   Pro = importModule("SmartTranslateProKit");
+  UI = importModule("SmartTranslateUI");
   modulesLoaded = true;
 } catch (error) {
   const alert = new Alert();
   alert.title = "Missing Scriptable Modules";
   alert.message =
     "Could not import required modules.\n\n" +
-    "Fix: In Scriptable, create scripts named EXACTLY:\n" +
+    "Fix: create scripts named EXACTLY:\n" +
     "• SmartTranslateShared\n" +
     "• SmartTranslateConversation\n" +
     "• SmartTranslateProKit\n" +
+    "• SmartTranslateUI\n" +
     "• SmartTranslatePro\n\n" +
-    "Easier option: paste scripts/dist/SmartTranslatePro.js as ONE script.";
+    "Or paste scripts/dist/SmartTranslatePro.js as ONE script.";
   alert.addAction("OK");
   await alert.presentAlert();
 }
@@ -73,14 +57,24 @@ async function main() {
     if (isFirstRun) {
       await Shared.showSuccess(
         "Setup Complete",
-        "SmartTranslate Pro is ready. Run again to open the full menu."
+        "SmartTranslate Pro is ready."
       );
       return;
     }
   }
 
-  const action = await showMainMenu(config);
+  // Stay in the home UITable until the user dismisses it.
+  while (true) {
+    const action = await showMainMenu(config);
+    if (!action || action === "cancel") {
+      break;
+    }
+    await runProAction(action, config);
+    config = (await Shared.loadConfig()) || config;
+  }
+}
 
+async function runProAction(action, config) {
   switch (action) {
     case "type":
       await runType(config);
@@ -102,83 +96,187 @@ async function main() {
     case "people":
       await Pro.runPeopleDirectory(config);
       break;
-    case "timeline":
-      await Pro.runTimeline();
+    case "settings":
+      await runSettingsMenu(config);
       break;
-    case "stats":
-      await Pro.runStatistics();
-      break;
-    case "learning":
-      await Pro.runLearningMode();
-      break;
-    case "voices":
-      await Pro.runVoiceProfiles(config);
-      break;
-    case "settings": {
-      const newConfig = await runSetupWizard(false, config);
-      if (newConfig) {
-        await Shared.saveConfig(newConfig);
-      }
-      break;
-    }
     default:
       break;
   }
 }
 
 // ============================================================
-// MAIN MENU
+// HOME MENU
 // ============================================================
+
+async function buildHomeContext(config) {
+  const sessions = await Conversation.loadAllSessions();
+  const active = await Shared.loadJSON(Shared.ACTIVE_SESSION_FILE);
+  const peopleData = await Shared.loadJSON(Shared.PEOPLE_FILE);
+  const people = Array.isArray(peopleData) ? peopleData : [];
+
+  let favoriteCount = 0;
+  for (const session of sessions) {
+    if (session.intelligence && session.intelligence.favorite) {
+      favoriteCount += 1;
+    }
+  }
+
+  const libraryMeta =
+    sessions.length === 0
+      ? "No saved chats yet"
+      : `${sessions.length} chat${sessions.length === 1 ? "" : "s"}${favoriteCount ? ` · ${favoriteCount} ★` : ""}`;
+
+  const peopleMeta =
+    people.length === 0
+      ? "Add people as you chat"
+      : `${people.length} profile${people.length === 1 ? "" : "s"}`;
+
+  return {
+    primaryLang: Shared.getLanguageDisplayName(config.languages.primary),
+    conversationLang: Shared.getLanguageDisplayName(config.languages.conversation),
+    primaryFlag: UI?.flagForCode
+      ? UI.flagForCode(config.languages.primary)
+      : "🌐",
+    conversationFlag: UI?.flagForCode
+      ? UI.flagForCode(config.languages.conversation)
+      : "🌐",
+    engine: config.speech.engine === "apple" ? "Apple Voice" : "ElevenLabs",
+    activeSession: active?.person?.name
+      ? {
+          name: active.person.name,
+          turns: active.session?.turnCount || 0
+        }
+      : null,
+    libraryMeta,
+    peopleMeta
+  };
+}
 
 async function showMainMenu(config) {
-  const alert = new Alert();
-  alert.title = "SmartTranslate Pro";
-  const engine = config.speech.engine === "apple" ? "Apple" : "ElevenLabs";
-  alert.message = `Speech: ${engine}\n${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
-  alert.addAction("Type");
-  alert.addAction("Paste");
-  alert.addAction("Dictate");
-  alert.addAction("Conversation");
-  alert.addAction("Library");
-  alert.addAction("People");
-  alert.addAction("Timeline");
-  alert.addAction("Statistics");
-  alert.addAction("Learning");
-  alert.addAction("Voice Profiles");
-  alert.addAction("Settings");
-  alert.addCancelAction("Cancel");
+  const context = await buildHomeContext(config);
 
-  const choice = await alert.presentSheet();
-  switch (choice) {
-    case 0:
-      return "type";
-    case 1:
-      return "paste";
-    case 2:
-      return "dictate";
-    case 3:
-      return "conversation";
-    case 4:
-      return "library";
-    case 5:
-      return "people";
-    case 6:
-      return "timeline";
-    case 7:
-      return "stats";
-    case 8:
-      return "learning";
-    case 9:
-      return "voices";
-    case 10:
-      return "settings";
-    default:
+  if (UI && typeof UI.presentProHome === "function") {
+    try {
+      const action = await UI.presentProHome(context);
+      if (!action) {
+        return "cancel";
+      }
+      return action;
+    } catch (error) {
+      console.error(`Pro home WebView failed: ${error?.message || error}`);
+    }
+  }
+
+  return await showMainMenuFallback(config);
+}
+
+async function showMainMenuFallback(config) {
+  const engine = config.speech.engine === "apple" ? "Apple" : "ElevenLabs";
+  const pair = `${Shared.getLanguageDisplayName(config.languages.primary)} ↔ ${Shared.getLanguageDisplayName(config.languages.conversation)}`;
+
+  while (true) {
+    const choice = await Shared.presentTableMenu({
+      title: "SmartTranslate Pro",
+      subtitle: `${pair} · ${engine}`,
+      sections: [
+        {
+          header: "Translate",
+          rows: [
+            {
+              id: "translate",
+              title: "Quick Translate",
+              subtitle: "Type, paste, or dictate",
+              symbol: "character.bubble",
+              disclosure: true
+            },
+            {
+              id: "conversation",
+              title: "Conversation",
+              subtitle: "Multi-turn with a person",
+              symbol: "person.2"
+            }
+          ]
+        },
+        {
+          header: "Review",
+          rows: [
+            {
+              id: "library",
+              title: "Library",
+              subtitle: "Search, favorites, export",
+              symbol: "books.vertical"
+            },
+            {
+              id: "people",
+              title: "People",
+              subtitle: "Profiles and past chats",
+              symbol: "person.crop.circle"
+            }
+          ]
+        },
+        {
+          header: "App",
+          rows: [
+            {
+              id: "settings",
+              title: "Settings",
+              subtitle: "Languages, keys, speech",
+              symbol: "gearshape"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
       return "cancel";
+    }
+
+    if (choice === "translate") {
+      const nested = await showTranslateMenu();
+      if (!nested) {
+        continue;
+      }
+      return nested;
+    }
+
+    return choice;
   }
 }
 
+async function showTranslateMenu() {
+  return await Shared.presentTableMenu({
+    title: "Quick Translate",
+    subtitle: "One shot",
+    sections: [
+      {
+        rows: [
+          {
+            id: "type",
+            title: "Type",
+            subtitle: "Enter text",
+            symbol: "keyboard"
+          },
+          {
+            id: "paste",
+            title: "Paste",
+            subtitle: "From clipboard",
+            symbol: "doc.on.clipboard"
+          },
+          {
+            id: "dictate",
+            title: "Dictate",
+            subtitle: "Speak to translate",
+            symbol: "mic"
+          }
+        ]
+      }
+    ]
+  });
+}
+
 // ============================================================
-// ONE-SHOT WORKFLOWS
+// ONE-SHOT
 // ============================================================
 
 async function runType(config) {
@@ -216,36 +314,94 @@ async function runDictate(config) {
   }
 }
 
+async function runSettingsMenu(config) {
+  while (true) {
+    const deeplSaved = Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY);
+    const elevenSaved = Shared.hasSecret(Shared.ELEVENLABS_KEYCHAIN_KEY);
+    const choice = await Shared.presentTableMenu({
+      title: "Settings",
+      subtitle: deeplSaved
+        ? `DeepL saved ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}`
+        : "DeepL key missing",
+      sections: [
+        {
+          rows: [
+            {
+              id: "preferences",
+              title: "Languages & Speech",
+              subtitle: "Targets, dictation, voice engine",
+              symbol: "globe"
+            },
+            {
+              id: "keys",
+              title: "API Keys",
+              subtitle: deeplSaved
+                ? `DeepL ${Shared.maskSecret(Shared.getOptionalKey(Shared.DEEPL_KEYCHAIN_KEY))}${elevenSaved ? " · ElevenLabs saved" : ""}`
+                : "Set up DeepL and ElevenLabs",
+              symbol: "key"
+            },
+            {
+              id: "test",
+              title: "Test Translation",
+              subtitle: "Verify DeepL + speech",
+              symbol: "checkmark.seal"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
+      return;
+    }
+
+    if (choice === "preferences") {
+      const newConfig = await runSetupWizard(false, config, {
+        promptForKeys: false
+      });
+      if (newConfig) {
+        await Shared.saveConfig(newConfig);
+        config = newConfig;
+      }
+    } else if (choice === "keys") {
+      await manageApiKeys();
+    } else if (choice === "test") {
+      await testConfiguration(config);
+    }
+  }
+}
+
+async function manageApiKeys() {
+  await Shared.runApiKeyWizard({ mode: "hub" });
+}
+
 // ============================================================
-// SETUP / SETTINGS
+// SETUP
 // ============================================================
 
-async function runSetupWizard(isFirstRun, existingConfig) {
+async function runSetupWizard(isFirstRun, existingConfig, options = {}) {
+  const promptForKeys = options.promptForKeys !== false;
   let config = Shared.deepMerge(Shared.DEFAULT_CONFIG, existingConfig || {});
 
   if (isFirstRun) {
     const welcome = new Alert();
     welcome.title = "Welcome to SmartTranslate Pro";
     welcome.message =
-      "Configure languages and API keys. Pro adds library, people, stats, learning, and export on top of v1.";
+      "Lean Pro: translate, conversations, library, and people.\n\nYour DeepL key is saved once in Keychain and reused.";
     welcome.addAction("Start Setup");
     await welcome.present();
   }
 
-  const deeplKey = await Shared.configureSecret(
-    "DeepL API Key",
-    Shared.DEEPL_KEYCHAIN_KEY,
-    "Enter your DeepL API key (use a key ending in :fx for the free tier)."
-  );
-  if (!deeplKey) {
-    return null;
+  if (promptForKeys || !Shared.hasSecret(Shared.DEEPL_KEYCHAIN_KEY)) {
+    const keysOk = await Shared.runApiKeyWizard({
+      mode: "deepl",
+      required: true,
+      isFirstRun: !!isFirstRun
+    });
+    if (!keysOk) {
+      return null;
+    }
   }
-
-  await Shared.configureSecret(
-    "OpenAI API Key (Optional)",
-    Pro.OPENAI_KEYCHAIN_KEY,
-    "Optional. Enables richer conversation summaries. Leave empty / Keep Existing to skip."
-  );
 
   config.languages.primary = await Shared.chooseLanguage(
     "Your Primary Language",
@@ -309,18 +465,11 @@ async function runSetupWizard(isFirstRun, existingConfig) {
       0.1,
       1.0
     );
-    config.speech.apple.pitch = await Shared.chooseSlider(
-      "Apple Speech Pitch",
-      config.speech.apple.pitch,
-      0.5,
-      2.0
-    );
   } else {
-    const elevenLabsKey = await Shared.configureSecret(
-      "ElevenLabs API Key",
-      Shared.ELEVENLABS_KEYCHAIN_KEY,
-      "Enter your ElevenLabs API key."
-    );
+    const elevenLabsKey = await Shared.runApiKeyWizard({
+      mode: "elevenlabs",
+      required: false
+    });
     config.speech.elevenlabs.enabled = !!elevenLabsKey;
 
     if (config.speech.elevenlabs.enabled) {
@@ -380,9 +529,6 @@ async function configureElevenLabsVoices(config, elevenLabsKey) {
       .slice(0, Shared.MAX_VOICE_RESULTS);
 
     if (compatibleVoices.length === 0) {
-      await Shared.showError(
-        `No compatible ElevenLabs voices were found for ${langName}. Apple speech can still be used as fallback.`
-      );
       continue;
     }
 

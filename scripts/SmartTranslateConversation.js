@@ -55,20 +55,47 @@ async function runConversation(config, hooks = {}) {
 
 async function showConversationMenu(hooks = {}) {
   const active = await loadActiveSession();
-  const alert = new Alert();
-  alert.title = "Conversation";
+
   if (active) {
-    alert.message = `Active with ${active.person.name} · ${active.session.turnCount} turns`;
-    alert.addAction("Continue Active");
-    alert.addAction("Discard & Start New");
-    alert.addAction("History");
-    alert.addAction("End Active");
-    alert.addCancelAction("Cancel");
-    const choice = await alert.presentAlert();
-    if (choice === 0) {
-      return "continue";
+    const choice = await Shared.presentTableMenu({
+      title: "Conversation",
+      subtitle: `Active with ${active.person.name} · ${active.session.turnCount} turns`,
+      sections: [
+        {
+          rows: [
+            {
+              id: "continue",
+              title: "Continue",
+              subtitle: "Resume the active session",
+              symbol: "play.fill"
+            },
+            {
+              id: "history",
+              title: "History",
+              subtitle: "Browse saved conversations",
+              symbol: "clock"
+            },
+            {
+              id: "end",
+              title: "End Active",
+              subtitle: "Finalize and save",
+              symbol: "checkmark.circle"
+            },
+            {
+              id: "discard",
+              title: "Discard & Start New",
+              subtitle: "Delete active turns",
+              symbol: "trash"
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!choice) {
+      return "cancel";
     }
-    if (choice === 1) {
+    if (choice === "discard") {
       const abandon = await Shared.confirm(
         "Discard Active Conversation?",
         "This permanently discards the active conversation and its turns."
@@ -79,28 +106,37 @@ async function showConversationMenu(hooks = {}) {
       await deleteActiveSession();
       return "new";
     }
-    if (choice === 2) {
-      return "history";
-    }
-    if (choice === 3) {
+    if (choice === "end") {
       await endConversation(active, hooks);
       return "cancel";
     }
-    return "cancel";
+    return choice;
   }
 
-  alert.message = "Start a multi-turn conversation with a person.";
-  alert.addAction("New Conversation");
-  alert.addAction("History");
-  alert.addCancelAction("Cancel");
-  const choice = await alert.presentAlert();
-  if (choice === 0) {
-    return "new";
-  }
-  if (choice === 1) {
-    return "history";
-  }
-  return "cancel";
+  const choice = await Shared.presentTableMenu({
+    title: "Conversation",
+    subtitle: "Start or review",
+    sections: [
+      {
+        rows: [
+          {
+            id: "new",
+            title: "New Conversation",
+            subtitle: "Pick a person and begin",
+            symbol: "plus.bubble"
+          },
+          {
+            id: "history",
+            title: "History",
+            subtitle: "Browse saved conversations",
+            symbol: "clock"
+          }
+        ]
+      }
+    ]
+  });
+
+  return choice || "cancel";
 }
 
 async function runNewSessionFlow(config, hooks = {}) {
@@ -303,20 +339,40 @@ async function processTurn(session, config) {
 }
 
 async function getTurnInput(config) {
-  const alert = new Alert();
-  alert.title = "Conversation Turn";
-  alert.message = "Capture the next turn.";
-  alert.addAction("Dictate");
-  alert.addAction("Type");
-  alert.addAction("Paste");
-  alert.addCancelAction("Cancel");
+  const choice = await Shared.presentTableMenu({
+    title: "Conversation Turn",
+    subtitle: "Capture the next turn",
+    sections: [
+      {
+        rows: [
+          {
+            id: "dictate",
+            title: "Dictate",
+            subtitle: "Speak this turn",
+            symbol: "mic"
+          },
+          {
+            id: "type",
+            title: "Type",
+            subtitle: "Enter what was said",
+            symbol: "keyboard"
+          },
+          {
+            id: "paste",
+            title: "Paste",
+            subtitle: "Use clipboard text",
+            symbol: "doc.on.clipboard"
+          }
+        ]
+      }
+    ]
+  });
 
-  const choice = await alert.presentAlert();
-  if (choice === -1) {
+  if (!choice) {
     return null;
   }
 
-  if (choice === 0) {
+  if (choice === "dictate") {
     try {
       const text = await Shared.dictateText(config);
       return { type: "dictation", text: text || "" };
@@ -328,7 +384,7 @@ async function getTurnInput(config) {
     }
   }
 
-  if (choice === 1) {
+  if (choice === "type") {
     const text = await Shared.promptForText(
       "Type Turn",
       "Enter what was said."
@@ -339,7 +395,7 @@ async function getTurnInput(config) {
     return { type: "text", text };
   }
 
-  if (choice === 2) {
+  if (choice === "paste") {
     return {
       type: "clipboard",
       text: Pasteboard.paste() || ""
@@ -350,36 +406,69 @@ async function getTurnInput(config) {
 }
 
 async function chooseSpeaker(personName) {
-  const alert = new Alert();
-  alert.title = "Who Spoke?";
-  alert.message = "Select the speaker for this turn.";
-  alert.addAction("Me");
-  alert.addAction(personName || "Person");
-  alert.addCancelAction("Cancel");
+  const choice = await Shared.presentTableMenu({
+    title: "Who Spoke?",
+    subtitle: "Select the speaker for this turn",
+    sections: [
+      {
+        rows: [
+          {
+            id: "me",
+            title: "Me",
+            subtitle: "You spoke this turn",
+            symbol: "person.fill"
+          },
+          {
+            id: "person",
+            title: personName || "Person",
+            subtitle: "Your conversation partner",
+            symbol: "person.crop.circle"
+          }
+        ]
+      }
+    ]
+  });
 
-  const choice = await alert.presentAlert();
-  if (choice === -1) {
+  if (!choice) {
     return null;
   }
-  return choice === 0 ? "me" : "person";
+  return choice;
 }
 
 async function promptAfterTurn(session) {
-  const alert = new Alert();
-  alert.title = "Turn Saved";
-  alert.message = `${session.person.name} · ${session.session.turnCount} turns\n\nContinue the conversation?`;
-  alert.addAction("Continue");
-  alert.addAction("End Conversation");
-  alert.addAction("Pause (Keep Active)");
+  const choice = await Shared.presentTableMenu({
+    title: "Turn Saved",
+    subtitle: `${session.person.name} · ${session.session.turnCount} turns`,
+    sections: [
+      {
+        rows: [
+          {
+            id: "continue",
+            title: "Continue",
+            subtitle: "Capture another turn",
+            symbol: "play.fill"
+          },
+          {
+            id: "end",
+            title: "End Conversation",
+            subtitle: "Save and finish",
+            symbol: "checkmark.circle"
+          },
+          {
+            id: "stop",
+            title: "Pause",
+            subtitle: "Keep active for later",
+            symbol: "clock"
+          }
+        ]
+      }
+    ]
+  });
 
-  const choice = await alert.presentAlert();
-  if (choice === 0) {
-    return "continue";
+  if (!choice) {
+    return "stop";
   }
-  if (choice === 1) {
-    return "end";
-  }
-  return "stop";
+  return choice;
 }
 
 // ============================================================
@@ -440,42 +529,48 @@ async function endConversation(session, hooks = {}) {
 
 async function selectOrCreatePerson() {
   const people = await loadPeople();
+  const rows = people.map((person, index) => ({
+    id: String(index),
+    title: person.name,
+    subtitle: "Existing person",
+    symbol: "person.fill"
+  }));
+  rows.push({
+    id: "new",
+    title: "New Person",
+    subtitle: "Create a profile",
+    symbol: "person.badge.plus"
+  });
 
-  const alert = new Alert();
-  alert.title = "Conversation Person";
-  alert.message = "Select an existing person or create a new one.";
-  for (const person of people) {
-    alert.addAction(person.name);
-  }
-  alert.addAction("New Person");
-  alert.addCancelAction("Cancel");
+  const choice = await Shared.presentTableMenu({
+    title: "Who are you talking to?",
+    subtitle: "Select or create",
+    sections: [{ rows }]
+  });
 
-  const choice = await alert.presentAlert();
-  if (choice === -1) {
+  if (!choice) {
     return null;
   }
 
-  if (choice < people.length) {
-    return people[choice];
+  if (choice === "new") {
+    const name = await Shared.promptForText(
+      "New Person",
+      "Enter the person's name."
+    );
+    if (!name) {
+      return null;
+    }
+    const person = {
+      id: Shared.generateUUID(),
+      name: name.trim(),
+      createdAt: new Date().toISOString()
+    };
+    people.push(person);
+    await savePeople(people);
+    return person;
   }
 
-  const name = await Shared.promptForText(
-    "New Person",
-    "Enter the person's name."
-  );
-  if (!name) {
-    return null;
-  }
-
-  const person = {
-    id: Shared.generateUUID(),
-    name: name.trim(),
-    createdAt: new Date().toISOString()
-  };
-
-  people.push(person);
-  await savePeople(people);
-  return person;
+  return people[Number(choice)] || null;
 }
 
 async function loadPeople() {
@@ -527,17 +622,26 @@ async function showHistory() {
     return;
   }
 
-  const labels = sessions.map(
-    (session) =>
-      `${session.person.name} — ${Shared.formatDate(session.session.startedAt)} — ${session.session.turnCount} turns`
-  );
+  const choice = await Shared.presentTableMenu({
+    title: "History",
+    subtitle: `${sessions.length} conversation${sessions.length === 1 ? "" : "s"}`,
+    sections: [
+      {
+        rows: sessions.map((session, index) => ({
+          id: String(index),
+          title: session.person.name,
+          subtitle: `${Shared.formatDate(session.session.startedAt)} · ${session.session.turnCount} turns`,
+          symbol: "bubble.left.and.bubble.right",
+          disclosure: true
+        }))
+      }
+    ]
+  });
 
-  const choice = await Shared.chooseFromList("Conversation History", labels);
-  if (choice === -1) {
+  if (choice == null) {
     return;
   }
-
-  await displayConversation(sessions[choice]);
+  await displayConversation(sessions[Number(choice)]);
 }
 
 async function displayConversation(session) {
@@ -566,22 +670,16 @@ async function displayConversation(session) {
     lines.push("");
   }
 
-  const alert = new Alert();
-  alert.title = session.person.name;
-  alert.message = lines.join("\n");
-  alert.addAction("Close");
-  await alert.presentAlert();
+  await Shared.showSuccess(session.person.name, lines.join("\n"));
 }
 
 async function showSessionSummary(session) {
-  const alert = new Alert();
-  alert.title = "Conversation Active";
-  alert.message =
+  await Shared.showSuccess(
+    "Conversation Active",
     `Person: ${session.person.name}\n\n` +
-    `Languages: ${Shared.getLanguageDisplayName(session.languages.primary)} ↔ ${Shared.getLanguageDisplayName(session.languages.conversation)}\n\n` +
-    `Turns: ${session.session.turnCount}`;
-  alert.addAction("Continue");
-  await alert.presentAlert();
+      `Languages: ${Shared.getLanguageDisplayName(session.languages.primary)} ↔ ${Shared.getLanguageDisplayName(session.languages.conversation)}\n\n` +
+      `Turns: ${session.session.turnCount}`
+  );
 }
 
 // ============================================================
