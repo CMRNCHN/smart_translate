@@ -844,9 +844,6 @@ async function presentProHome(context) {
   if (!parsed) {
     return null;
   }
-  if (parsed.a === "continue") {
-    return "conversation";
-  }
   return parsed.a;
 }
 
