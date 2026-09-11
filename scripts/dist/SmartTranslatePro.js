@@ -237,9 +237,13 @@ async function ensureSecret(title, keychainKey, message, options = {}) {
     return existing;
   }
 
-  return await configureSecret(title, keychainKey, message, {
+  const value = await configureSecret(title, keychainKey, message, {
     allowKeepExisting: !!existing
   });
+  if (value) {
+    Keychain.set(keychainKey, value);
+  }
+  return value;
 }
 
 async function configureSecret(title, keychainKey, message, options = {}) {
@@ -280,7 +284,7 @@ async function configureSecret(title, keychainKey, message, options = {}) {
     await showError(`${title} cannot be empty.`);
     return null;
   }
-  Keychain.set(keychainKey, newKey);
+  // Do not Keychain.set here — callers that verify (saveApiKey) must write only after verify succeeds.
   return newKey;
 }
 
@@ -358,11 +362,12 @@ async function verifyDeepLKey(apiKey) {
   request.method = "GET";
   request.timeoutInterval = DEEPL_TIMEOUT;
   request.headers = { Authorization: `DeepL-Auth-Key ${key}` };
-  const response = await request.load();
-  if (response.statusCode === 200) {
+  await request.load();
+  const status = request.response?.statusCode;
+  if (status === 200) {
     return true;
   }
-  throw new Error(`DeepL rejected the key (HTTP ${response.statusCode}).`);
+  throw new Error(`DeepL rejected the key (HTTP ${status}).`);
 }
 
 async function verifyElevenLabsKey(apiKey) {
@@ -1388,7 +1393,7 @@ return {
 // ============================================================
 
 async function runConversation(config, hooks = {}) {
-  const menu = await showConversationMenu(hooks);
+  const menu = hooks.forceAction || (await showConversationMenu(hooks));
   switch (menu) {
     case "continue": {
       const session = await loadActiveSession();
@@ -3660,9 +3665,6 @@ async function presentProHome(context) {
   if (!parsed) {
     return null;
   }
-  if (parsed.a === "continue") {
-    return "conversation";
-  }
   return parsed.a;
 }
 
@@ -3747,6 +3749,12 @@ async function runProAction(action, config) {
       break;
     case "dictate":
       await runDictate(config);
+      break;
+    case "continue":
+      await Conversation.runConversation(config, {
+        onCompleted: Pro.processCompletedSession,
+        forceAction: "continue"
+      });
       break;
     case "conversation":
       await Conversation.runConversation(config, {
